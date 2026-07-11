@@ -35,3 +35,11 @@ export function fmtDateShort(dateStr) {
 export function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
+export function fmtWeight(kg) {
+  if (kg === null || kg === undefined || !isFinite(kg)) return "—";
+  return `${kg.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg`;
+}
+export function fmtVolume(kg) {
+  if (kg === null || kg === undefined || !isFinite(kg)) return "—";
+  return `${Math.round(kg).toLocaleString("pt-BR")} kg`;
+}

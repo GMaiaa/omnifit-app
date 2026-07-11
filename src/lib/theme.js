@@ -33,7 +33,7 @@ export const BRAND_GRADIENT_STOPS = [
    real implementation ("active") or is a placeholder ("soon"). */
 export const MODALITIES = [
   { id: "corrida", label: "Corrida", color: "#00E0B2", icon: "Footprints", status: "active" },
-  { id: "musculacao", label: "Musculação", color: "#8A5CFF", icon: "Dumbbell", status: "soon" },
+  { id: "musculacao", label: "Musculação", color: "#8A5CFF", icon: "Dumbbell", status: "active" },
   { id: "ciclismo", label: "Ciclismo", color: "#FF9A3C", icon: "Bike", status: "soon" },
   { id: "natacao", label: "Natação", color: "#3A8DFF", icon: "Waves", status: "soon" },
   { id: "hyrox", label: "HYROX", color: "#A3E635", icon: "Flame", status: "soon" },

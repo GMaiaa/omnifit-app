@@ -13,6 +13,12 @@ import { typeInfo } from "../modules/running/constants";
 import { InsightsPanel } from "../modules/running/components/analytics/InsightsPanel";
 import { ConsistencyCard } from "../modules/running/components/analytics/ConsistencyCard";
 import { PaceEvolutionCard } from "../modules/running/components/analytics/PaceEvolutionCard";
+import {
+  consistency as strengthConsistency,
+  mostFrequentExerciseKey,
+  loadProgression,
+  weeklyVolume as strengthWeeklyVolume,
+} from "../modules/strength/analytics";
 import { ScoreGauge } from "./ScoreGauge";
 
 const corrida = modalityInfo("corrida");
@@ -28,53 +34,122 @@ function qualify(value) {
   return "Baixa";
 }
 
-/* Home's global score today is Corrida-only — see the 3 sub-scores below.
-   Each is intentionally simple and explainable; recovery and the other
-   modalities join once they have real data behind them. */
-function useGlobalScore(workouts) {
-  return useMemo(() => {
-    const consistency4 = consistency(workouts, 4).activeWeeksPct;
+/* Each modality contributes its own 3-factor read (consistência / carga /
+   progressão); the gauge itself still only ever shows 3 sub-scores, blended
+   across whichever modalities already have data. Deeper cross-modality
+   signals (interference, recovery) are out of scope until Ciclismo/Natação/
+   HYROX exist — this is just the foundation those would plug into later. */
+function runningSubScores(workouts) {
+  if (workouts.length === 0) return null;
+  const consistency4 = consistency(workouts, 4).activeWeeksPct;
 
-    const vol = weeklyVolume(workouts, 8);
-    const currentWeekKm = vol.weeks[vol.weeks.length - 1]?.km ?? 0;
-    const deviation = vol.avgKm > 0 ? Math.abs(currentWeekKm / vol.avgKm - 1) : 0;
-    const loadScore = vol.avgKm > 0 ? clamp(100 - Math.max(0, deviation - 0.33) * 150, 0, 100) : 60;
+  const vol = weeklyVolume(workouts, 8);
+  const currentWeekKm = vol.weeks[vol.weeks.length - 1]?.km ?? 0;
+  const deviation = vol.avgKm > 0 ? Math.abs(currentWeekKm / vol.avgKm - 1) : 0;
+  const loadScore = vol.avgKm > 0 ? clamp(100 - Math.max(0, deviation - 0.33) * 150, 0, 100) : 60;
 
-    const dom = dominantType(workouts);
-    const trend = paceTrendByType(workouts, dom, 8);
-    const paceScore = trend.paceChangePct === null ? 70 : clamp(70 - trend.paceChangePct * 3, 0, 100);
+  const dom = dominantType(workouts);
+  const trend = paceTrendByType(workouts, dom, 8);
+  const progressionScore = trend.paceChangePct === null ? 70 : clamp(70 - trend.paceChangePct * 3, 0, 100);
 
-    const score = Math.round((consistency4 + loadScore + paceScore) / 3);
-
-    return {
-      score,
-      dominantTypeId: dom,
-      subScores: [
-        { label: "Consistência", value: consistency4, hint: `${qualify(consistency4)} (${Math.round(consistency4)}% das últimas 4 sem.)` },
-        { label: "Carga semanal", value: loadScore, hint: vol.avgKm > 0 ? `${currentWeekKm.toFixed(1)} km vs. média de ${vol.avgKm.toFixed(1)} km` : "sem histórico ainda" },
-        {
-          label: "Tendência de pace",
-          value: paceScore,
-          hint: trend.paceChangePct === null
-            ? "sem dado suficiente"
-            : `${trend.paceChangePct < 0 ? "melhorando" : "piorando"} ${Math.abs(trend.paceChangePct).toFixed(1)}% em ${typeInfo(dom).label}`,
-        },
-      ],
-    };
-  }, [workouts]);
+  return {
+    consistency: consistency4, load: loadScore, progression: progressionScore,
+    dominantTypeId: dom,
+    hints: {
+      consistency: `${qualify(consistency4)} (${Math.round(consistency4)}% das últimas 4 sem. em Corrida)`,
+      load: vol.avgKm > 0 ? `${currentWeekKm.toFixed(1)} km vs. média de ${vol.avgKm.toFixed(1)} km` : "sem histórico ainda",
+      progression: trend.paceChangePct === null
+        ? "sem dado suficiente em Corrida"
+        : `${trend.paceChangePct < 0 ? "melhorando" : "piorando"} ${Math.abs(trend.paceChangePct).toFixed(1)}% em ${typeInfo(dom).label}`,
+    },
+  };
 }
 
-export function Home({ workouts, onOpenModule }) {
-  const { score, dominantTypeId, subScores } = useGlobalScore(workouts);
+function strengthSubScores(sessions) {
+  if (sessions.length === 0) return null;
+  const consistency4 = strengthConsistency(sessions, 4).activeWeeksPct;
+
+  const vol = strengthWeeklyVolume(sessions, 8);
+  const currentWeekVolume = vol.weeks[vol.weeks.length - 1]?.volume ?? 0;
+  const deviation = vol.avgVolume > 0 ? Math.abs(currentWeekVolume / vol.avgVolume - 1) : 0;
+  const loadScore = vol.avgVolume > 0 ? clamp(100 - Math.max(0, deviation - 0.33) * 150, 0, 100) : 60;
+
+  const domKey = mostFrequentExerciseKey(sessions);
+  const trend = domKey ? loadProgression(sessions, domKey, 8) : { loadChangePct: null };
+  const progressionScore = trend.loadChangePct === null ? 70 : clamp(70 + trend.loadChangePct * 3, 0, 100);
+
+  return {
+    consistency: consistency4, load: loadScore, progression: progressionScore,
+    hints: {
+      consistency: `${qualify(consistency4)} (${Math.round(consistency4)}% das últimas 4 sem. em Musculação)`,
+      load: vol.avgVolume > 0 ? `${Math.round(currentWeekVolume).toLocaleString("pt-BR")} kg vs. média de ${Math.round(vol.avgVolume).toLocaleString("pt-BR")} kg` : "sem histórico ainda",
+      progression: trend.loadChangePct === null
+        ? "sem dado suficiente em Musculação"
+        : `${trend.loadChangePct > 0 ? "subindo" : "caindo"} ${Math.abs(trend.loadChangePct).toFixed(1)}% de carga`,
+    },
+  };
+}
+
+function useGlobalScore(workouts, strengthSessions) {
+  return useMemo(() => {
+    const running = runningSubScores(workouts);
+    const strength = strengthSubScores(strengthSessions);
+    const active = [running, strength].filter(Boolean);
+
+    if (active.length === 0) {
+      return {
+        score: 0,
+        dominantTypeId: null,
+        subScores: [
+          { label: "Consistência", value: 0, hint: "sem histórico ainda" },
+          { label: "Carga semanal", value: 0, hint: "sem histórico ainda" },
+          { label: "Progressão", value: 0, hint: "sem histórico ainda" },
+        ],
+      };
+    }
+
+    const avg = (key) => active.reduce((a, s) => a + s[key], 0) / active.length;
+    const hintFor = (key) => active.map((s) => s.hints[key]).join(" · ");
+
+    return {
+      score: Math.round((avg("consistency") + avg("load") + avg("progression")) / 3),
+      dominantTypeId: running?.dominantTypeId ?? null,
+      subScores: [
+        { label: "Consistência", value: avg("consistency"), hint: hintFor("consistency") },
+        { label: "Carga semanal", value: avg("load"), hint: hintFor("load") },
+        { label: "Progressão", value: avg("progression"), hint: hintFor("progression") },
+      ],
+    };
+  }, [workouts, strengthSessions]);
+}
+
+export function Home({ workouts, strengthSessions = [], onOpenModule }) {
+  const { score, dominantTypeId, subScores } = useGlobalScore(workouts, strengthSessions);
 
   const vol8 = useMemo(() => weeklyVolume(workouts, 8), [workouts]);
   const totalKm8 = useMemo(() => vol8.weeks.reduce((a, w) => a + w.km, 0), [vol8]);
-  const totalHours8 = useMemo(
+  const runningHours8 = useMemo(
     () => workouts
       .filter((w) => vol8.weeks.length && w.date >= vol8.weeks[0].start)
       .reduce((a, w) => a + w.durationSec, 0) / 3600,
     [workouts, vol8]
   );
+  const strengthHours8 = useMemo(
+    () => strengthSessions
+      .filter((s) => vol8.weeks.length && s.date >= vol8.weeks[0].start)
+      .reduce((a, s) => a + s.durationSec, 0) / 3600,
+    [strengthSessions, vol8]
+  );
+  const totalHours8 = runningHours8 + strengthHours8;
+
+  const modalityHours = { corrida: runningHours8, musculacao: strengthHours8 };
+  const hasAnyData = workouts.length > 0 || strengthSessions.length > 0;
+
+  const scoreDescription = workouts.length > 0 && strengthSessions.length > 0
+    ? "Score calculado a partir dos seus treinos de Corrida e Musculação."
+    : strengthSessions.length > 0
+      ? "Score calculado a partir dos seus treinos de Musculação — as demais modalidades entram assim que tiverem dados."
+      : "Score calculado a partir dos seus treinos de Corrida — as demais modalidades entram assim que tiverem dados.";
 
   const effortSplit = useMemo(() => volumeByType(workouts), [workouts]);
   const effortTotal = effortSplit.reduce((a, d) => a + d.value, 0);
@@ -82,12 +157,9 @@ export function Home({ workouts, onOpenModule }) {
   return (
     <div className="flex flex-col gap-5">
       <Card>
-        <CardHeader
-          title="Performance geral"
-          description="Score calculado a partir dos seus treinos de Corrida — hoje a única modalidade com dados."
-        />
+        <CardHeader title="Performance geral" description={scoreDescription} />
         <ScoreGauge score={score} subScores={subScores} />
-        {workouts.length === 0 && (
+        {!hasAnyData && (
           <div className="mt-4 pt-4 flex items-center justify-between flex-wrap gap-3" style={{ borderTop: `1px solid ${C.borderSoft}` }}>
             <p className="text-sm" style={{ color: C.gray }}>
               Ainda não há treinos registrados — o score começa a fazer sentido depois do primeiro.
@@ -105,7 +177,7 @@ export function Home({ workouts, onOpenModule }) {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
-          <div className="text-xs uppercase tracking-wider" style={{ color: C.gray, fontWeight: 600 }}>Volume (8 sem)</div>
+          <div className="text-xs uppercase tracking-wider" style={{ color: C.gray, fontWeight: 600 }}>Volume Corrida (8 sem)</div>
           <div className="mt-2" style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 24, color: C.white }}>
             {totalKm8.toFixed(1)} <span style={{ fontSize: 12, color: C.gray, fontWeight: 500 }}>km</span>
           </div>
@@ -117,9 +189,11 @@ export function Home({ workouts, onOpenModule }) {
           </div>
         </Card>
         <Card className="col-span-2 lg:col-span-2">
-          <CardHeader title="Distribuição por modalidade" description="% do volume total registrado" />
+          <CardHeader title="Distribuição por modalidade" description="% das horas treinadas nas últimas 8 semanas" />
           <div className="flex h-3 rounded-full overflow-hidden" style={{ background: C.surface2 }}>
-            <div style={{ width: workouts.length ? "100%" : "0%", background: corrida.color }} />
+            {MODALITIES.filter((m) => m.status === "active" && modalityHours[m.id] > 0).map((m) => (
+              <div key={m.id} style={{ width: `${(modalityHours[m.id] / totalHours8) * 100}%`, background: m.color }} />
+            ))}
           </div>
           <div className="flex flex-col gap-1.5 mt-3">
             {MODALITIES.map((m) => (
@@ -129,7 +203,9 @@ export function Home({ workouts, onOpenModule }) {
                   {m.label}
                 </span>
                 {m.status === "active" ? (
-                  <span style={{ color: C.gray }}>{workouts.length ? "100%" : "0%"}</span>
+                  <span style={{ color: C.gray }}>
+                    {totalHours8 > 0 ? `${Math.round((modalityHours[m.id] / totalHours8) * 100)}%` : "0%"}
+                  </span>
                 ) : (
                   <span className="flex items-center gap-1" style={{ color: C.gray }}>
                     <Lock size={11} /> em breve
