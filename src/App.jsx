@@ -9,6 +9,8 @@ import { useWorkouts } from "./modules/running/useWorkouts";
 import { StrengthModule } from "./modules/strength/StrengthModule";
 import { useTemplates } from "./modules/strength/useTemplates";
 import { useSessions } from "./modules/strength/useSessions";
+import { SwimmingModule } from "./modules/swimming/SwimmingModule";
+import { useSwimWorkouts } from "./modules/swimming/useSwimWorkouts";
 
 const MODALITY_ICONS = { Footprints, Dumbbell, Bike, Waves, Flame };
 
@@ -22,6 +24,7 @@ export default function OmnifitApp() {
   const running = useWorkouts();
   const strengthTemplates = useTemplates();
   const strengthSessions = useSessions();
+  const swimming = useSwimWorkouts();
 
   const activeModality = MODALITIES.find((m) => m.id === tab);
 
@@ -78,11 +81,18 @@ export default function OmnifitApp() {
 
       <main className="px-4 sm:px-8 py-6 max-w-6xl mx-auto">
         {tab === "home" ? (
-          <Home workouts={running.workouts} strengthSessions={strengthSessions.sessions} onOpenModule={setTab} />
+          <Home
+            workouts={running.workouts}
+            strengthSessions={strengthSessions.sessions}
+            swimWorkouts={swimming.workouts}
+            onOpenModule={setTab}
+          />
         ) : tab === "corrida" ? (
           <RunningModule {...running} />
         ) : tab === "musculacao" ? (
           <StrengthModule templates={strengthTemplates} sessions={strengthSessions} />
+        ) : tab === "natacao" ? (
+          <SwimmingModule {...swimming} />
         ) : (
           <ModuleComingSoon modality={activeModality} />
         )}

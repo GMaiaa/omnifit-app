@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Lock, Target } from "lucide-react";
 import { C, MODALITIES, modalityInfo } from "../lib/theme";
+import { addDays, mondayOf, todayStr } from "../lib/format";
 import { Card, CardHeader } from "../components/ui";
 import {
   consistency,
@@ -19,6 +20,13 @@ import {
   loadProgression,
   weeklyVolume as strengthWeeklyVolume,
 } from "../modules/strength/analytics";
+import {
+  consistency as swimConsistency,
+  dominantStroke,
+  paceTrendByStroke,
+  weeklyVolume as swimWeeklyVolume,
+} from "../modules/swimming/analytics";
+import { strokeInfo } from "../modules/swimming/constants";
 import { ScoreGauge } from "./ScoreGauge";
 
 const corrida = modalityInfo("corrida");
@@ -90,11 +98,41 @@ function strengthSubScores(sessions) {
   };
 }
 
-function useGlobalScore(workouts, strengthSessions) {
+/* Same 3-factor read as runningSubScores/strengthSubScores, scoped to
+   Natação's own units (metros, pace por 100m). */
+function swimmingSubScores(workouts) {
+  if (workouts.length === 0) return null;
+  const consistency4 = swimConsistency(workouts, 4).activeWeeksPct;
+
+  const vol = swimWeeklyVolume(workouts, 8);
+  const currentWeekM = vol.weeks[vol.weeks.length - 1]?.distanceM ?? 0;
+  const deviation = vol.avgDistanceM > 0 ? Math.abs(currentWeekM / vol.avgDistanceM - 1) : 0;
+  const loadScore = vol.avgDistanceM > 0 ? clamp(100 - Math.max(0, deviation - 0.33) * 150, 0, 100) : 60;
+
+  const dom = dominantStroke(workouts);
+  const trend = paceTrendByStroke(workouts, dom, 8);
+  const progressionScore = trend.paceChangePct === null ? 70 : clamp(70 - trend.paceChangePct * 3, 0, 100);
+
+  return {
+    consistency: consistency4, load: loadScore, progression: progressionScore,
+    hints: {
+      consistency: `${qualify(consistency4)} (${Math.round(consistency4)}% das últimas 4 sem. em Natação)`,
+      load: vol.avgDistanceM > 0
+        ? `${Math.round(currentWeekM).toLocaleString("pt-BR")} m vs. média de ${Math.round(vol.avgDistanceM).toLocaleString("pt-BR")} m`
+        : "sem histórico ainda",
+      progression: trend.paceChangePct === null
+        ? "sem dado suficiente em Natação"
+        : `${trend.paceChangePct < 0 ? "melhorando" : "piorando"} ${Math.abs(trend.paceChangePct).toFixed(1)}% em ${strokeInfo(dom).label}`,
+    },
+  };
+}
+
+function useGlobalScore(workouts, strengthSessions, swimWorkouts) {
   return useMemo(() => {
     const running = runningSubScores(workouts);
     const strength = strengthSubScores(strengthSessions);
-    const active = [running, strength].filter(Boolean);
+    const swimming = swimmingSubScores(swimWorkouts);
+    const active = [running, strength, swimming].filter(Boolean);
 
     if (active.length === 0) {
       return {
@@ -120,36 +158,48 @@ function useGlobalScore(workouts, strengthSessions) {
         { label: "Progressão", value: avg("progression"), hint: hintFor("progression") },
       ],
     };
-  }, [workouts, strengthSessions]);
+  }, [workouts, strengthSessions, swimWorkouts]);
 }
 
-export function Home({ workouts, strengthSessions = [], onOpenModule }) {
-  const { score, dominantTypeId, subScores } = useGlobalScore(workouts, strengthSessions);
+export function Home({ workouts, strengthSessions = [], swimWorkouts = [], onOpenModule }) {
+  const { score, dominantTypeId, subScores } = useGlobalScore(workouts, strengthSessions, swimWorkouts);
 
   const vol8 = useMemo(() => weeklyVolume(workouts, 8), [workouts]);
   const totalKm8 = useMemo(() => vol8.weeks.reduce((a, w) => a + w.km, 0), [vol8]);
+  const windowStart8 = addDays(mondayOf(todayStr()), -7 * 7);
   const runningHours8 = useMemo(
     () => workouts
-      .filter((w) => vol8.weeks.length && w.date >= vol8.weeks[0].start)
+      .filter((w) => w.date >= windowStart8)
       .reduce((a, w) => a + w.durationSec, 0) / 3600,
-    [workouts, vol8]
+    [workouts, windowStart8]
   );
   const strengthHours8 = useMemo(
     () => strengthSessions
-      .filter((s) => vol8.weeks.length && s.date >= vol8.weeks[0].start)
+      .filter((s) => s.date >= windowStart8)
       .reduce((a, s) => a + s.durationSec, 0) / 3600,
-    [strengthSessions, vol8]
+    [strengthSessions, windowStart8]
   );
-  const totalHours8 = runningHours8 + strengthHours8;
+  const swimHours8 = useMemo(
+    () => swimWorkouts
+      .filter((w) => w.date >= windowStart8)
+      .reduce((a, w) => a + w.durationSec, 0) / 3600,
+    [swimWorkouts, windowStart8]
+  );
+  const totalHours8 = runningHours8 + strengthHours8 + swimHours8;
 
-  const modalityHours = { corrida: runningHours8, musculacao: strengthHours8 };
-  const hasAnyData = workouts.length > 0 || strengthSessions.length > 0;
+  const modalityHours = { corrida: runningHours8, musculacao: strengthHours8, natacao: swimHours8 };
+  const hasAnyData = workouts.length > 0 || strengthSessions.length > 0 || swimWorkouts.length > 0;
 
-  const scoreDescription = workouts.length > 0 && strengthSessions.length > 0
-    ? "Score calculado a partir dos seus treinos de Corrida e Musculação."
-    : strengthSessions.length > 0
-      ? "Score calculado a partir dos seus treinos de Musculação — as demais modalidades entram assim que tiverem dados."
-      : "Score calculado a partir dos seus treinos de Corrida — as demais modalidades entram assim que tiverem dados.";
+  const activeLabels = [
+    workouts.length > 0 && "Corrida",
+    strengthSessions.length > 0 && "Musculação",
+    swimWorkouts.length > 0 && "Natação",
+  ].filter(Boolean);
+  const scoreDescription = activeLabels.length === 0
+    ? "Registre seu primeiro treino para o score de performance começar a fazer sentido."
+    : activeLabels.length === 3
+      ? `Score calculado a partir dos seus treinos de ${activeLabels[0]}, ${activeLabels[1]} e ${activeLabels[2]}.`
+      : `Score calculado a partir dos seus treinos de ${activeLabels.join(" e ")} — as demais modalidades entram assim que tiverem dados.`;
 
   const effortSplit = useMemo(() => volumeByType(workouts), [workouts]);
   const effortTotal = effortSplit.reduce((a, d) => a + d.value, 0);

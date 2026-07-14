@@ -43,3 +43,8 @@ export function fmtVolume(kg) {
   if (kg === null || kg === undefined || !isFinite(kg)) return "—";
   return `${Math.round(kg).toLocaleString("pt-BR")} kg`;
 }
+export function fmtDistanceM(m) {
+  if (m === null || m === undefined || !isFinite(m)) return "—";
+  if (m >= 1000) return `${(m / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} km`;
+  return `${Math.round(m).toLocaleString("pt-BR")} m`;
+}
