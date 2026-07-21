@@ -40,14 +40,6 @@ export default function OmnifitApp() {
         color: C.white,
       }}
     >
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,800&display=swap');
-        * { font-family: 'Poppins', sans-serif; box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 3px; }
-        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
-      `}</style>
-
       <header
         className="sticky top-0 z-30 flex items-center px-4 sm:px-8 py-3.5"
         style={{ background: `${C.bg}F2`, borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}
