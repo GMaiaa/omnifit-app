@@ -11,6 +11,9 @@ import { useTemplates } from "./modules/strength/useTemplates";
 import { useSessions } from "./modules/strength/useSessions";
 import { SwimmingModule } from "./modules/swimming/SwimmingModule";
 import { useSwimWorkouts } from "./modules/swimming/useSwimWorkouts";
+import { HyroxModule } from "./modules/hyrox/HyroxModule";
+import { useHyroxTemplates } from "./modules/hyrox/useHyroxTemplates";
+import { useHyroxSessions } from "./modules/hyrox/useHyroxSessions";
 
 const MODALITY_ICONS = { Footprints, Dumbbell, Bike, Waves, Flame };
 
@@ -25,6 +28,8 @@ export default function OmnifitApp() {
   const strengthTemplates = useTemplates();
   const strengthSessions = useSessions();
   const swimming = useSwimWorkouts();
+  const hyroxTemplates = useHyroxTemplates();
+  const hyroxSessions = useHyroxSessions();
 
   const activeModality = MODALITIES.find((m) => m.id === tab);
 
@@ -85,6 +90,7 @@ export default function OmnifitApp() {
             workouts={running.workouts}
             strengthSessions={strengthSessions.sessions}
             swimWorkouts={swimming.workouts}
+            hyroxSessions={hyroxSessions.sessions}
             onOpenModule={setTab}
           />
         ) : tab === "corrida" ? (
@@ -93,6 +99,8 @@ export default function OmnifitApp() {
           <StrengthModule templates={strengthTemplates} sessions={strengthSessions} />
         ) : tab === "natacao" ? (
           <SwimmingModule {...swimming} />
+        ) : tab === "hyrox" ? (
+          <HyroxModule templates={hyroxTemplates} sessions={hyroxSessions} />
         ) : (
           <ModuleComingSoon modality={activeModality} />
         )}

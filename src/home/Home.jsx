@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Lock, Target } from "lucide-react";
 import { C, MODALITIES, modalityInfo } from "../lib/theme";
-import { addDays, mondayOf, todayStr } from "../lib/format";
+import { addDays, fmtDuration, mondayOf, todayStr } from "../lib/format";
 import { Card, CardHeader } from "../components/ui";
 import {
   consistency,
@@ -27,6 +27,13 @@ import {
   weeklyVolume as swimWeeklyVolume,
 } from "../modules/swimming/analytics";
 import { strokeInfo } from "../modules/swimming/constants";
+import {
+  consistency as hyroxConsistency,
+  exerciseOptions as hyroxExerciseOptions,
+  exerciseProgression as hyroxExerciseProgression,
+  mostFrequentExerciseKey as hyroxMostFrequentExerciseKey,
+  weeklyVolume as hyroxWeeklyVolume,
+} from "../modules/hyrox/analytics";
 import { ScoreGauge } from "./ScoreGauge";
 
 const corrida = modalityInfo("corrida");
@@ -127,12 +134,46 @@ function swimmingSubScores(workouts) {
   };
 }
 
-function useGlobalScore(workouts, strengthSessions, swimWorkouts) {
+/* Same 3-factor read, scoped a HYROX's own units (tempo de sessão, e o
+   exercício mais frequente como proxy de "esforço dominante" — pode ser de
+   qualquer um dos 4 tipos de métrica). */
+function hyroxSubScores(sessions) {
+  if (sessions.length === 0) return null;
+  const consistency4 = hyroxConsistency(sessions, 4).activeWeeksPct;
+
+  const vol = hyroxWeeklyVolume(sessions, 8);
+  const currentWeekDuration = vol.weeks[vol.weeks.length - 1]?.durationSec ?? 0;
+  const deviation = vol.avgDurationSec > 0 ? Math.abs(currentWeekDuration / vol.avgDurationSec - 1) : 0;
+  const loadScore = vol.avgDurationSec > 0 ? clamp(100 - Math.max(0, deviation - 0.33) * 150, 0, 100) : 60;
+
+  const domKey = hyroxMostFrequentExerciseKey(sessions);
+  const domName = hyroxExerciseOptions(sessions).find((o) => o.key === domKey)?.name ?? "";
+  const trend = domKey ? hyroxExerciseProgression(sessions, domKey, 8) : { changePct: null, improved: null };
+  const progressionScore = trend.changePct === null
+    ? 70
+    : clamp(70 + (trend.improved ? Math.abs(trend.changePct) : -Math.abs(trend.changePct)) * 3, 0, 100);
+
+  return {
+    consistency: consistency4, load: loadScore, progression: progressionScore,
+    hints: {
+      consistency: `${qualify(consistency4)} (${Math.round(consistency4)}% das últimas 4 sem. em HYROX)`,
+      load: vol.avgDurationSec > 0
+        ? `${fmtDuration(currentWeekDuration)} vs. média de ${fmtDuration(vol.avgDurationSec)}`
+        : "sem histórico ainda",
+      progression: trend.changePct === null
+        ? "sem dado suficiente em HYROX"
+        : `${trend.improved ? "melhorando" : "piorando"} ${Math.abs(trend.changePct).toFixed(1)}% em ${domName}`,
+    },
+  };
+}
+
+function useGlobalScore(workouts, strengthSessions, swimWorkouts, hyroxSessions) {
   return useMemo(() => {
     const running = runningSubScores(workouts);
     const strength = strengthSubScores(strengthSessions);
     const swimming = swimmingSubScores(swimWorkouts);
-    const active = [running, strength, swimming].filter(Boolean);
+    const hyrox = hyroxSubScores(hyroxSessions);
+    const active = [running, strength, swimming, hyrox].filter(Boolean);
 
     if (active.length === 0) {
       return {
@@ -158,11 +199,11 @@ function useGlobalScore(workouts, strengthSessions, swimWorkouts) {
         { label: "Progressão", value: avg("progression"), hint: hintFor("progression") },
       ],
     };
-  }, [workouts, strengthSessions, swimWorkouts]);
+  }, [workouts, strengthSessions, swimWorkouts, hyroxSessions]);
 }
 
-export function Home({ workouts, strengthSessions = [], swimWorkouts = [], onOpenModule }) {
-  const { score, dominantTypeId, subScores } = useGlobalScore(workouts, strengthSessions, swimWorkouts);
+export function Home({ workouts, strengthSessions = [], swimWorkouts = [], hyroxSessions = [], onOpenModule }) {
+  const { score, dominantTypeId, subScores } = useGlobalScore(workouts, strengthSessions, swimWorkouts, hyroxSessions);
 
   const vol8 = useMemo(() => weeklyVolume(workouts, 8), [workouts]);
   const totalKm8 = useMemo(() => vol8.weeks.reduce((a, w) => a + w.km, 0), [vol8]);
@@ -185,20 +226,27 @@ export function Home({ workouts, strengthSessions = [], swimWorkouts = [], onOpe
       .reduce((a, w) => a + w.durationSec, 0) / 3600,
     [swimWorkouts, windowStart8]
   );
-  const totalHours8 = runningHours8 + strengthHours8 + swimHours8;
+  const hyroxHours8 = useMemo(
+    () => hyroxSessions
+      .filter((s) => s.date >= windowStart8)
+      .reduce((a, s) => a + s.durationSec, 0) / 3600,
+    [hyroxSessions, windowStart8]
+  );
+  const totalHours8 = runningHours8 + strengthHours8 + swimHours8 + hyroxHours8;
 
-  const modalityHours = { corrida: runningHours8, musculacao: strengthHours8, natacao: swimHours8 };
-  const hasAnyData = workouts.length > 0 || strengthSessions.length > 0 || swimWorkouts.length > 0;
+  const modalityHours = { corrida: runningHours8, musculacao: strengthHours8, natacao: swimHours8, hyrox: hyroxHours8 };
+  const hasAnyData = workouts.length > 0 || strengthSessions.length > 0 || swimWorkouts.length > 0 || hyroxSessions.length > 0;
 
   const activeLabels = [
     workouts.length > 0 && "Corrida",
     strengthSessions.length > 0 && "Musculação",
     swimWorkouts.length > 0 && "Natação",
+    hyroxSessions.length > 0 && "HYROX",
   ].filter(Boolean);
   const scoreDescription = activeLabels.length === 0
     ? "Registre seu primeiro treino para o score de performance começar a fazer sentido."
-    : activeLabels.length === 3
-      ? `Score calculado a partir dos seus treinos de ${activeLabels[0]}, ${activeLabels[1]} e ${activeLabels[2]}.`
+    : activeLabels.length >= 3
+      ? `Score calculado a partir dos seus treinos de ${activeLabels.slice(0, -1).join(", ")} e ${activeLabels[activeLabels.length - 1]}.`
       : `Score calculado a partir dos seus treinos de ${activeLabels.join(" e ")} — as demais modalidades entram assim que tiverem dados.`;
 
   const effortSplit = useMemo(() => volumeByType(workouts), [workouts]);

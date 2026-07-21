@@ -36,6 +36,6 @@ export const MODALITIES = [
   { id: "musculacao", label: "Musculação", color: "#8A5CFF", icon: "Dumbbell", status: "active" },
   { id: "ciclismo", label: "Ciclismo", color: "#FF9A3C", icon: "Bike", status: "soon" },
   { id: "natacao", label: "Natação", color: "#3A8DFF", icon: "Waves", status: "active" },
-  { id: "hyrox", label: "HYROX", color: "#A3E635", icon: "Flame", status: "soon" },
+  { id: "hyrox", label: "HYROX", color: "#A3E635", icon: "Flame", status: "active" },
 ];
 export const modalityInfo = (id) => MODALITIES.find((m) => m.id === id) || MODALITIES[0];
