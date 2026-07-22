@@ -14,6 +14,8 @@ import { useSwimWorkouts } from "./modules/swimming/useSwimWorkouts";
 import { HyroxModule } from "./modules/hyrox/HyroxModule";
 import { useHyroxTemplates } from "./modules/hyrox/useHyroxTemplates";
 import { useHyroxSessions } from "./modules/hyrox/useHyroxSessions";
+import { CiclismoModule } from "./modules/ciclismo/CiclismoModule";
+import { useCyclingWorkouts } from "./modules/ciclismo/useCyclingWorkouts";
 
 const MODALITY_ICONS = { Footprints, Dumbbell, Bike, Waves, Flame };
 
@@ -30,6 +32,7 @@ export default function OmnifitApp() {
   const swimming = useSwimWorkouts();
   const hyroxTemplates = useHyroxTemplates();
   const hyroxSessions = useHyroxSessions();
+  const cycling = useCyclingWorkouts();
 
   const activeModality = MODALITIES.find((m) => m.id === tab);
 
@@ -83,12 +86,15 @@ export default function OmnifitApp() {
             strengthSessions={strengthSessions.sessions}
             swimWorkouts={swimming.workouts}
             hyroxSessions={hyroxSessions.sessions}
+            cyclingWorkouts={cycling.workouts}
             onOpenModule={setTab}
           />
         ) : tab === "corrida" ? (
           <RunningModule {...running} />
         ) : tab === "musculacao" ? (
           <StrengthModule templates={strengthTemplates} sessions={strengthSessions} />
+        ) : tab === "ciclismo" ? (
+          <CiclismoModule {...cycling} />
         ) : tab === "natacao" ? (
           <SwimmingModule {...swimming} />
         ) : tab === "hyrox" ? (
