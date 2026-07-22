@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Home as HomeIcon, Dumbbell, Bike, Waves, Flame, Footprints } from "lucide-react";
+import { Home as HomeIcon, Dumbbell, Bike, Waves, Flame, Footprints, LogOut } from "lucide-react";
 import { C, MODALITIES } from "./lib/theme";
+import { useAuth } from "./auth/AuthContext";
 import { LogoMark } from "./components/ui";
 import { ModuleComingSoon } from "./components/ModuleComingSoon";
 import { Home } from "./home/Home";
@@ -31,6 +32,22 @@ export default function OmnifitApp() {
   const hyroxTemplates = useHyroxTemplates();
   const hyroxSessions = useHyroxSessions();
 
+  const { signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
+
+  async function handleSignOut() {
+    setSignOutError("");
+    setSigningOut(true);
+    try {
+      await signOut();
+      // sucesso: o AuthGate detecta a sessão nula e volta para o login sozinho
+    } catch {
+      setSignOutError("Não foi possível sair. Tente novamente.");
+      setSigningOut(false);
+    }
+  }
+
   const activeModality = MODALITIES.find((m) => m.id === tab);
 
   return (
@@ -41,7 +58,7 @@ export default function OmnifitApp() {
       }}
     >
       <header
-        className="sticky top-0 z-30 flex items-center px-4 sm:px-8 py-3.5"
+        className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-8 py-3.5"
         style={{ background: `${C.bg}F2`, borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}
       >
         <div className="flex items-center gap-2.5">
@@ -53,6 +70,17 @@ export default function OmnifitApp() {
             </div>
           </div>
         </div>
+        <button
+          onClick={handleSignOut}
+          disabled={signingOut}
+          aria-label="Sair"
+          title="Sair"
+          className="flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+          style={{ color: C.gray, border: `1px solid ${C.border}` }}
+        >
+          <LogOut size={14} />
+          <span className="hidden sm:inline">{signingOut ? "Saindo…" : "Sair"}</span>
+        </button>
       </header>
 
       <nav className="flex gap-1 px-4 sm:px-8 pt-4 overflow-x-auto" style={{ borderBottom: `1px solid ${C.borderSoft}` }}>
@@ -97,6 +125,15 @@ export default function OmnifitApp() {
           <ModuleComingSoon modality={activeModality} />
         )}
       </main>
+
+      {signOutError && (
+        <div
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-xl px-4 py-2.5 text-sm z-50"
+          style={{ background: `${C.danger}22`, color: C.danger, border: `1px solid ${C.danger}55` }}
+        >
+          {signOutError}
+        </div>
+      )}
     </div>
   );
 }

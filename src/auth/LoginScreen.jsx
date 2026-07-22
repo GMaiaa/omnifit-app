@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { AlertCircle, Apple, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { C } from "../lib/theme";
+import { useAuth } from "./AuthContext";
+import { mapAuthError } from "./authErrors";
 import { AuthShell } from "./components/AuthShell";
 import { AuthTextField } from "./components/AuthTextField";
 import { AuthButton, AuthDivider } from "./components/AuthButton";
 import { GoogleGlyph } from "./components/GoogleGlyph";
-
-const DEMO_EMAIL = "demo@omnifit.app";
-const DEMO_PASSWORD = "omnifit123";
 
 function validateEmail(value) {
   if (!value.trim()) return "E-mail obrigatório.";
@@ -20,47 +19,39 @@ function validatePassword(value) {
   return "";
 }
 
-/* Tela de login — apenas interface: nenhuma chamada de rede acontece aqui.
-   "Autenticação" é simulada com um setTimeout e um par de credenciais fixo
-   (ver DEMO_EMAIL/DEMO_PASSWORD) só para demonstrar os estados de sucesso
-   e erro; a lógica real entra numa etapa futura. */
-export function LoginScreen({ onLogin, onSignup, onForgot }) {
+/* Tela de login, conectada ao Supabase Auth via AuthContext. Não navega
+   explicitamente após o sucesso: assim que o signIn atualiza a sessão, o
+   AuthGate reage sozinho e troca de tela — aqui só cuidamos de validação,
+   loading e erro. */
+export function LoginScreen({ onSignup, onForgot }) {
+  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [touched, setTouched] = useState({ email: false, password: false });
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
-  const [socialLoading, setSocialLoading] = useState(null); // null | "google" | "apple"
 
   const emailError = validateEmail(email);
   const passwordError = validatePassword(password);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setTouched({ email: true, password: true });
-    if (emailError || passwordError) return;
+    if (emailError || passwordError || submitting) return;
 
     setFormError("");
     setSubmitting(true);
-    setTimeout(() => {
+    try {
+      await signIn({ email: email.trim(), password });
+      // sucesso: o AuthGate detecta a sessão e troca de tela sozinho
+    } catch (err) {
+      setFormError(mapAuthError(err, "Não foi possível entrar. Tente novamente."));
       setSubmitting(false);
-      const ok = email.trim().toLowerCase() === DEMO_EMAIL && password === DEMO_PASSWORD;
-      if (ok) onLogin?.();
-      else setFormError("Credenciais incorretas (simulação).");
-    }, 1100);
+    }
   }
 
-  function handleSocial(provider) {
-    setFormError("");
-    setSocialLoading(provider);
-    setTimeout(() => {
-      setSocialLoading(null);
-      onLogin?.();
-    }, 900);
-  }
-
-  const anyLoading = submitting || !!socialLoading;
+  const anyLoading = submitting;
 
   return (
     <AuthShell>
@@ -140,22 +131,19 @@ export function LoginScreen({ onLogin, onSignup, onForgot }) {
         </AuthButton>
       </form>
 
-      <p className="text-[11px] text-center mt-4 leading-relaxed" style={{ color: C.gray }}>
-        Demonstração: <span style={{ color: C.white, fontWeight: 600 }}>{DEMO_EMAIL}</span> / <span style={{ color: C.white, fontWeight: 600 }}>{DEMO_PASSWORD}</span>
-      </p>
-
       <div className="w-full mt-5">
         <AuthDivider label="Ou continue com" />
       </div>
 
+      {/* Login social ainda não está implementado (o escopo atual é
+          e-mail/senha) — os botões ficam visíveis para preservar o layout,
+          mas desabilitados até a integração OAuth ser feita. */}
       <div className="w-full grid grid-cols-2 gap-3 mt-1">
-        <AuthButton variant="secondary" onClick={() => handleSocial("google")} loading={socialLoading === "google"} disabled={anyLoading}>
-          {socialLoading === "google" ? "Conectando…" : (<><GoogleGlyph /> Google</>)}
+        <AuthButton variant="secondary" disabled>
+          <GoogleGlyph /> Google
         </AuthButton>
-        {/* Em produção este botão só aparece em plataformas Apple; mantido
-            sempre visível aqui por ainda não haver detecção de plataforma. */}
-        <AuthButton variant="secondary" onClick={() => handleSocial("apple")} loading={socialLoading === "apple"} disabled={anyLoading}>
-          {socialLoading === "apple" ? "Conectando…" : (<><Apple size={16} /> Apple</>)}
+        <AuthButton variant="secondary" disabled>
+          <Apple size={16} /> Apple
         </AuthButton>
       </div>
 

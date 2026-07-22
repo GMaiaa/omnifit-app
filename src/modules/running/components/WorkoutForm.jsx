@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Gauge, X } from "lucide-react";
+import { CheckCircle2, Gauge, X } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtPace, todayStr, uid } from "../../../lib/format";
 import { TYPES } from "../constants";
+import { computePaceSecKm, createRunningWorkout, mapRunningWorkoutError } from "../runningService";
 
 const corrida = modalityInfo("corrida");
 
@@ -16,28 +17,66 @@ export function WorkoutForm({ onSave, onClose }) {
   const [durMin, setDurMin] = useState("");
   const [durSec, setDurSec] = useState("");
   const [hr, setHr] = useState("");
+  const [calories, setCalories] = useState("");
   const [rpe, setRpe] = useState(5);
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const distNum = parseFloat(distance.replace(",", "."));
-  const totalSec = (parseInt(durMin || 0, 10) * 60) + parseInt(durSec || 0, 10);
-  const paceLive = distNum > 0 && totalSec > 0 ? totalSec / distNum : null;
+  const minNum = durMin === "" ? 0 : parseInt(durMin, 10);
+  const secNum = durSec === "" ? 0 : parseInt(durSec, 10);
+  const totalSec = minNum * 60 + secNum;
+  const paceLive = computePaceSecKm(totalSec, distNum);
+  const busy = submitting || success;
 
-  function handleSubmit() {
+  async function handleSubmit() {
+    if (busy) return; // evita envio duplicado
+
+    if (!date) return setError("Informe a data do treino.");
+    if (!type) return setError("Selecione o tipo de treino.");
     if (!distNum || distNum <= 0) return setError("Informe uma distância válida.");
+    if (minNum < 0) return setError("Os minutos não podem ser negativos.");
+    if (secNum < 0 || secNum > 59) return setError("Os segundos devem estar entre 0 e 59.");
     if (!totalSec || totalSec <= 0) return setError("Informe o tempo do treino.");
+    if (hr && parseInt(hr, 10) <= 0) return setError("Informe uma frequência cardíaca válida.");
+    if (calories && parseInt(calories, 10) < 0) return setError("As calorias não podem ser negativas.");
+
     setError("");
-    onSave({
-      id: uid(),
-      date,
-      type,
-      distanceKm: distNum,
-      durationSec: totalSec,
-      avgHr: hr ? parseInt(hr, 10) : null,
-      rpe,
-      notes: notes.trim(),
-    });
+    setSubmitting(true);
+    try {
+      await createRunningWorkout({
+        date,
+        type,
+        distanceKm: distNum,
+        durationSec: totalSec,
+        avgHr: hr ? parseInt(hr, 10) : null,
+        calories: calories ? parseInt(calories, 10) : null,
+        rpe,
+        notes: notes.trim() || null,
+      });
+
+      setSubmitting(false);
+      setSuccess(true);
+
+      // mantém o comportamento já existente (lista mockada local) só depois
+      // que o cadastro real no Supabase foi confirmado
+      const localWorkout = {
+        id: uid(),
+        date,
+        type,
+        distanceKm: distNum,
+        durationSec: totalSec,
+        avgHr: hr ? parseInt(hr, 10) : null,
+        rpe,
+        notes: notes.trim(),
+      };
+      setTimeout(() => onSave(localWorkout), 900);
+    } catch (err) {
+      setSubmitting(false);
+      setError(mapRunningWorkoutError(err));
+    }
   }
 
   return (
@@ -50,17 +89,18 @@ export function WorkoutForm({ onSave, onClose }) {
           <h2 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 20, color: C.white }}>
             Novo treino
           </h2>
-          <button onClick={onClose} className="rounded-full p-1.5" style={{ color: C.gray }}>
+          <button onClick={onClose} disabled={busy} className="rounded-full p-1.5 disabled:opacity-40" style={{ color: C.gray }}>
             <X size={20} />
           </button>
         </div>
 
         <div className="flex flex-col gap-4">
           <div>
-            <label className="text-xs font-semibold" style={{ color: C.gray }}>Data</label>
+            <label className="text-xs font-semibold" style={{ color: C.gray }}>Data do treino</label>
             <input
               type="date" value={date} onChange={(e) => setDate(e.target.value)}
-              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+              disabled={busy}
+              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-60"
               style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
             />
           </div>
@@ -72,7 +112,8 @@ export function WorkoutForm({ onSave, onClose }) {
                 <button
                   key={t.id}
                   onClick={() => setType(t.id)}
-                  className="rounded-xl px-2 py-2 text-xs font-semibold transition"
+                  disabled={busy}
+                  className="rounded-xl px-2 py-2 text-xs font-semibold transition disabled:opacity-60"
                   style={{
                     background: type === t.id ? `${t.color}26` : C.surface2,
                     color: type === t.id ? t.color : C.gray,
@@ -89,33 +130,36 @@ export function WorkoutForm({ onSave, onClose }) {
             <div>
               <label className="text-xs font-semibold" style={{ color: C.gray }}>Distância (km)</label>
               <input
-                type="text" inputMode="decimal" placeholder="ex: 10,25" value={distance}
+                type="text" inputMode="decimal" placeholder="5,00" value={distance}
                 onChange={(e) => setDistance(e.target.value)}
-                className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+                disabled={busy}
+                className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-60"
                 style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
               />
             </div>
             <div>
-              <label className="text-xs font-semibold" style={{ color: C.gray }}>Tempo</label>
+              <label className="text-xs font-semibold" style={{ color: C.gray }}>Duração</label>
               <div className="mt-1 flex items-center gap-1">
                 <input
                   type="number" min="0" placeholder="min" value={durMin}
                   onChange={(e) => setDurMin(e.target.value)}
-                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+                  disabled={busy}
+                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-60"
                   style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
                 />
                 <span style={{ color: C.gray }}>:</span>
                 <input
                   type="number" min="0" max="59" placeholder="seg" value={durSec}
                   onChange={(e) => setDurSec(e.target.value)}
-                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+                  disabled={busy}
+                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-60"
                   style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
                 />
               </div>
             </div>
           </div>
 
-          {paceLive && (
+          {paceLive !== null && (
             <div className="rounded-xl px-3 py-2 text-sm flex items-center gap-2" style={{ background: `${corrida.color}14`, color: corrida.color }}>
               <Gauge size={15} /> Ritmo médio: {fmtPace(paceLive)} /km
             </div>
@@ -123,42 +167,63 @@ export function WorkoutForm({ onSave, onClose }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-semibold" style={{ color: C.gray }}>FC média (bpm)</label>
+              <label className="text-xs font-semibold" style={{ color: C.gray }}>Frequência cardíaca média</label>
               <input
-                type="number" placeholder="opcional" value={hr}
+                type="number" placeholder="145" value={hr}
                 onChange={(e) => setHr(e.target.value)}
-                className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+                disabled={busy}
+                className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-60"
                 style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
               />
             </div>
             <div>
-              <label className="text-xs font-semibold" style={{ color: C.gray }}>Esforço percebido (RPE): {rpe}</label>
+              <label className="text-xs font-semibold" style={{ color: C.gray }}>Calorias</label>
               <input
-                type="range" min="1" max="10" value={rpe}
-                onChange={(e) => setRpe(parseInt(e.target.value, 10))}
-                className="mt-3 w-full accent-teal-400"
+                type="number" min="0" placeholder="420" value={calories}
+                onChange={(e) => setCalories(e.target.value)}
+                disabled={busy}
+                className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-60"
+                style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
               />
             </div>
           </div>
 
           <div>
-            <label className="text-xs font-semibold" style={{ color: C.gray }}>Notas (opcional)</label>
+            <label className="text-xs font-semibold" style={{ color: C.gray }}>Percepção de esforço (RPE): {rpe}</label>
+            <input
+              type="range" min="1" max="10" value={rpe}
+              onChange={(e) => setRpe(parseInt(e.target.value, 10))}
+              disabled={busy}
+              className="mt-3 w-full accent-teal-400 disabled:opacity-60"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold" style={{ color: C.gray }}>Observações (opcional)</label>
             <textarea
               value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
               placeholder="Como foi o treino?"
-              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none"
+              disabled={busy}
+              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none disabled:opacity-60"
               style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
             />
           </div>
 
           {error && <div className="text-sm" style={{ color: C.danger }}>{error}</div>}
 
+          {success && (
+            <div className="flex items-center gap-2 text-sm" style={{ color: C.positive }}>
+              <CheckCircle2 size={16} /> Treino cadastrado com sucesso!
+            </div>
+          )}
+
           <button
             onClick={handleSubmit}
-            className="mt-1 w-full rounded-xl py-3 text-sm font-semibold"
+            disabled={busy}
+            className="mt-1 w-full rounded-xl py-3 text-sm font-semibold disabled:opacity-60"
             style={{ background: `linear-gradient(135deg, ${corrida.color}, #00AEEF)`, color: C.bg }}
           >
-            Salvar treino
+            {submitting ? "Salvando…" : success ? "Treino cadastrado!" : "Salvar treino"}
           </button>
         </div>
       </div>
