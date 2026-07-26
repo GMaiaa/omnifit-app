@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Plus, Trash2, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, Plus, Trash2, X } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { uid } from "../../../lib/format";
 import { DEFAULT_SETS, muscleGroupInfo } from "../constants";
+import { createStrengthTemplate, mapStrengthError } from "../strengthService";
 import { ExercisePicker } from "./ExercisePicker";
 
 const musculacao = modalityInfo("musculacao");
@@ -22,12 +23,20 @@ function newExerciseRow(entry) {
 /* ---------------------------------------------------------
    CREATE / EDIT TEMPLATE ("ficha") — bottom-sheet, same shell as
    running/WorkoutForm.jsx.
+
+   Só a criação (initial === null) já está integrada ao Supabase
+   (public.strength_templates). Edição continua salvando localmente até a
+   próxima parte da integração — ver strengthService.js.
 --------------------------------------------------------- */
 export function TemplateForm({ initial, onSave, onClose }) {
+  const isEdit = !!initial;
   const [name, setName] = useState(initial?.name ?? "");
   const [exercises, setExercises] = useState(initial?.exercises ?? []);
   const [showPicker, setShowPicker] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const busy = submitting || success;
 
   function addExercise(entry) {
     setExercises((prev) => [...prev, newExerciseRow(entry)]);
@@ -53,18 +62,41 @@ export function TemplateForm({ initial, onSave, onClose }) {
     });
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
+    if (busy) return; // evita envio duplicado
     if (!name.trim()) return setError("Dê um nome para o treino.");
     if (exercises.length === 0) return setError("Adicione pelo menos um exercício.");
     setError("");
-    const now = new Date().toISOString();
-    onSave({
-      id: initial?.id ?? uid(),
-      name: name.trim(),
-      exercises: exercises.map((e, i) => ({ ...e, order: i })),
-      createdAt: initial?.createdAt ?? now,
-      updatedAt: now,
-    });
+
+    const orderedExercises = exercises.map((e, i) => ({ ...e, order: i }));
+
+    if (isEdit) {
+      // Edição ainda não bate no Supabase — mantém o comportamento local
+      // (mock) até a próxima parte da integração.
+      onSave({
+        id: initial.id,
+        name: name.trim(),
+        exercises: orderedExercises,
+        createdAt: initial.createdAt,
+        updatedAt: new Date().toISOString(),
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const createdTemplate = await createStrengthTemplate({ name: name.trim(), exercises: orderedExercises });
+      setSubmitting(false);
+      setSuccess(true);
+
+      // usa o registro retornado pelo Supabase (id/created_at/updated_at
+      // reais) para incluir no estado compartilhado — nada de reconsultar
+      // a lista inteira.
+      setTimeout(() => onSave(createdTemplate), 900);
+    } catch (err) {
+      setSubmitting(false);
+      setError(mapStrengthError(err, "Não foi possível cadastrar o treino. Tente novamente."));
+    }
   }
 
   return (
@@ -75,9 +107,9 @@ export function TemplateForm({ initial, onSave, onClose }) {
       >
         <div className="flex items-center justify-between mb-5">
           <h2 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 20, color: C.white }}>
-            {initial ? "Editar treino" : "Novo treino"}
+            {isEdit ? "Editar treino" : "Novo treino"}
           </h2>
-          <button onClick={onClose} className="rounded-full p-1.5" style={{ color: C.gray }}>
+          <button onClick={onClose} disabled={busy} className="rounded-full p-1.5 disabled:opacity-40" style={{ color: C.gray }}>
             <X size={20} />
           </button>
         </div>
@@ -88,7 +120,8 @@ export function TemplateForm({ initial, onSave, onClose }) {
             <input
               type="text" value={name} onChange={(e) => setName(e.target.value)}
               placeholder="ex: Treino A — Costas e Bíceps"
-              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+              disabled={busy}
+              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-60"
               style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
             />
           </div>
@@ -106,10 +139,10 @@ export function TemplateForm({ initial, onSave, onClose }) {
                   <div key={ex.id} className="rounded-xl px-3 py-2.5" style={{ background: C.surface2, border: `1px solid ${C.borderSoft}` }}>
                     <div className="flex items-center gap-2">
                       <div className="flex flex-col">
-                        <button onClick={() => move(ex.id, -1)} disabled={i === 0} className="p-0.5 disabled:opacity-20" style={{ color: C.gray }}>
+                        <button onClick={() => move(ex.id, -1)} disabled={busy || i === 0} className="p-0.5 disabled:opacity-20" style={{ color: C.gray }}>
                           <ChevronUp size={13} />
                         </button>
-                        <button onClick={() => move(ex.id, 1)} disabled={i === exercises.length - 1} className="p-0.5 disabled:opacity-20" style={{ color: C.gray }}>
+                        <button onClick={() => move(ex.id, 1)} disabled={busy || i === exercises.length - 1} className="p-0.5 disabled:opacity-20" style={{ color: C.gray }}>
                           <ChevronDown size={13} />
                         </button>
                       </div>
@@ -125,11 +158,12 @@ export function TemplateForm({ initial, onSave, onClose }) {
                         <input
                           type="number" min="1" max="10" value={ex.defaultSets}
                           onChange={(e) => updateExercise(ex.id, { defaultSets: Math.max(1, parseInt(e.target.value || 1, 10)) })}
-                          className="w-12 rounded-lg px-1.5 py-1 text-xs text-center outline-none"
+                          disabled={busy}
+                          className="w-12 rounded-lg px-1.5 py-1 text-xs text-center outline-none disabled:opacity-60"
                           style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.white }}
                         />
                       </div>
-                      <button onClick={() => removeExercise(ex.id)} className="p-1 rounded-lg flex-shrink-0" style={{ color: C.gray }}>
+                      <button onClick={() => removeExercise(ex.id)} disabled={busy} className="p-1 rounded-lg flex-shrink-0 disabled:opacity-40" style={{ color: C.gray }}>
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -140,7 +174,8 @@ export function TemplateForm({ initial, onSave, onClose }) {
 
             <button
               onClick={() => setShowPicker(true)}
-              className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold"
+              disabled={busy}
+              className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold disabled:opacity-60"
               style={{ background: `${musculacao.color}14`, color: musculacao.color, border: `1px dashed ${musculacao.color}55` }}
             >
               <Plus size={15} /> Adicionar exercício
@@ -149,12 +184,23 @@ export function TemplateForm({ initial, onSave, onClose }) {
 
           {error && <div className="text-sm" style={{ color: C.danger }}>{error}</div>}
 
+          {success && (
+            <div className="flex items-center gap-2 text-sm" style={{ color: C.positive }}>
+              <CheckCircle2 size={16} /> Treino criado com sucesso!
+            </div>
+          )}
+
           <button
             onClick={handleSubmit}
-            className="mt-1 w-full rounded-xl py-3 text-sm font-semibold"
+            disabled={busy}
+            className="mt-1 w-full rounded-xl py-3 text-sm font-semibold disabled:opacity-60"
             style={{ background: `linear-gradient(135deg, ${musculacao.color}, #5B21B6)`, color: C.white }}
           >
-            {initial ? "Salvar alterações" : "Criar treino"}
+            {submitting
+              ? "Salvando…"
+              : success
+                ? "Treino criado!"
+                : (isEdit ? "Salvar alterações" : "Criar treino")}
           </button>
         </div>
       </div>

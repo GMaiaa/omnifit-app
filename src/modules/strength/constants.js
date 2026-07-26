@@ -22,9 +22,6 @@ export const EQUIPMENT = ["Barra", "Halteres", "Máquina", "Cabo/Polia", "Peso c
 
 export const DEFAULT_SETS = 3;
 
-export const STORAGE_KEY_TEMPLATES = "omnifit:musculacao:templates:v1";
-export const STORAGE_KEY_SESSIONS = "omnifit:musculacao:sessions:v1";
-
 /* Built-in catalog so exercise names stay consistent across sessions (that
    consistency is what makes per-exercise history/PRs work) while still
    letting the user type a custom one via ExercisePicker. */
