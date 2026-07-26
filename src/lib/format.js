@@ -48,3 +48,11 @@ export function fmtDistanceM(m) {
   if (m >= 1000) return `${(m / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} km`;
   return `${Math.round(m).toLocaleString("pt-BR")} m`;
 }
+export function fmtSpeed(kmh) {
+  if (kmh === null || kmh === undefined || !isFinite(kmh)) return "—";
+  return kmh.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+}
+export function fmtElevation(m) {
+  if (m === null || m === undefined || !isFinite(m)) return "—";
+  return `${Math.round(m).toLocaleString("pt-BR")} m`;
+}

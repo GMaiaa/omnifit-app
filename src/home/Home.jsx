@@ -34,6 +34,13 @@ import {
   mostFrequentExerciseKey as hyroxMostFrequentExerciseKey,
   weeklyVolume as hyroxWeeklyVolume,
 } from "../modules/hyrox/analytics";
+import {
+  consistency as cyclingConsistency,
+  dominantType as cyclingDominantType,
+  speedTrendByType as cyclingSpeedTrendByType,
+  weeklyVolume as cyclingWeeklyVolume,
+} from "../modules/ciclismo/analytics";
+import { typeInfo as cyclingTypeInfo } from "../modules/ciclismo/constants";
 import { ScoreGauge } from "./ScoreGauge";
 
 const corrida = modalityInfo("corrida");
@@ -167,13 +174,41 @@ function hyroxSubScores(sessions) {
   };
 }
 
-function useGlobalScore(workouts, strengthSessions, swimWorkouts, hyroxSessions) {
+/* Same 3-factor read, scoped to Ciclismo's own units (km/h de velocidade
+   média — maior é melhor, ao contrário do pace de Corrida/Natação). */
+function cyclingSubScores(workouts) {
+  if (workouts.length === 0) return null;
+  const consistency4 = cyclingConsistency(workouts, 4).activeWeeksPct;
+
+  const vol = cyclingWeeklyVolume(workouts, 8);
+  const currentWeekKm = vol.weeks[vol.weeks.length - 1]?.km ?? 0;
+  const deviation = vol.avgKm > 0 ? Math.abs(currentWeekKm / vol.avgKm - 1) : 0;
+  const loadScore = vol.avgKm > 0 ? clamp(100 - Math.max(0, deviation - 0.33) * 150, 0, 100) : 60;
+
+  const dom = cyclingDominantType(workouts);
+  const trend = cyclingSpeedTrendByType(workouts, dom, 8);
+  const progressionScore = trend.speedChangePct === null ? 70 : clamp(70 + trend.speedChangePct * 3, 0, 100);
+
+  return {
+    consistency: consistency4, load: loadScore, progression: progressionScore,
+    hints: {
+      consistency: `${qualify(consistency4)} (${Math.round(consistency4)}% das últimas 4 sem. em Ciclismo)`,
+      load: vol.avgKm > 0 ? `${currentWeekKm.toFixed(1)} km vs. média de ${vol.avgKm.toFixed(1)} km` : "sem histórico ainda",
+      progression: trend.speedChangePct === null
+        ? "sem dado suficiente em Ciclismo"
+        : `${trend.speedChangePct > 0 ? "melhorando" : "piorando"} ${Math.abs(trend.speedChangePct).toFixed(1)}% em ${cyclingTypeInfo(dom).label}`,
+    },
+  };
+}
+
+function useGlobalScore(workouts, strengthSessions, swimWorkouts, hyroxSessions, cyclingWorkouts) {
   return useMemo(() => {
     const running = runningSubScores(workouts);
     const strength = strengthSubScores(strengthSessions);
     const swimming = swimmingSubScores(swimWorkouts);
     const hyrox = hyroxSubScores(hyroxSessions);
-    const active = [running, strength, swimming, hyrox].filter(Boolean);
+    const cycling = cyclingSubScores(cyclingWorkouts);
+    const active = [running, strength, swimming, hyrox, cycling].filter(Boolean);
 
     if (active.length === 0) {
       return {
@@ -199,11 +234,11 @@ function useGlobalScore(workouts, strengthSessions, swimWorkouts, hyroxSessions)
         { label: "Progressão", value: avg("progression"), hint: hintFor("progression") },
       ],
     };
-  }, [workouts, strengthSessions, swimWorkouts, hyroxSessions]);
+  }, [workouts, strengthSessions, swimWorkouts, hyroxSessions, cyclingWorkouts]);
 }
 
-export function Home({ workouts, strengthSessions = [], swimWorkouts = [], hyroxSessions = [], onOpenModule }) {
-  const { score, dominantTypeId, subScores } = useGlobalScore(workouts, strengthSessions, swimWorkouts, hyroxSessions);
+export function Home({ workouts, strengthSessions = [], swimWorkouts = [], hyroxSessions = [], cyclingWorkouts = [], onOpenModule }) {
+  const { score, dominantTypeId, subScores } = useGlobalScore(workouts, strengthSessions, swimWorkouts, hyroxSessions, cyclingWorkouts);
 
   const vol8 = useMemo(() => weeklyVolume(workouts, 8), [workouts]);
   const totalKm8 = useMemo(() => vol8.weeks.reduce((a, w) => a + w.km, 0), [vol8]);
@@ -232,14 +267,21 @@ export function Home({ workouts, strengthSessions = [], swimWorkouts = [], hyrox
       .reduce((a, s) => a + s.durationSec, 0) / 3600,
     [hyroxSessions, windowStart8]
   );
-  const totalHours8 = runningHours8 + strengthHours8 + swimHours8 + hyroxHours8;
+  const cyclingHours8 = useMemo(
+    () => cyclingWorkouts
+      .filter((w) => w.date >= windowStart8)
+      .reduce((a, w) => a + w.durationSec, 0) / 3600,
+    [cyclingWorkouts, windowStart8]
+  );
+  const totalHours8 = runningHours8 + strengthHours8 + swimHours8 + hyroxHours8 + cyclingHours8;
 
-  const modalityHours = { corrida: runningHours8, musculacao: strengthHours8, natacao: swimHours8, hyrox: hyroxHours8 };
-  const hasAnyData = workouts.length > 0 || strengthSessions.length > 0 || swimWorkouts.length > 0 || hyroxSessions.length > 0;
+  const modalityHours = { corrida: runningHours8, musculacao: strengthHours8, ciclismo: cyclingHours8, natacao: swimHours8, hyrox: hyroxHours8 };
+  const hasAnyData = workouts.length > 0 || strengthSessions.length > 0 || swimWorkouts.length > 0 || hyroxSessions.length > 0 || cyclingWorkouts.length > 0;
 
   const activeLabels = [
     workouts.length > 0 && "Corrida",
     strengthSessions.length > 0 && "Musculação",
+    cyclingWorkouts.length > 0 && "Ciclismo",
     swimWorkouts.length > 0 && "Natação",
     hyroxSessions.length > 0 && "HYROX",
   ].filter(Boolean);
