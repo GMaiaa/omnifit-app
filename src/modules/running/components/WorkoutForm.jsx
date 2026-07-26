@@ -3,24 +3,39 @@ import { CheckCircle2, Gauge, X } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtPace, todayStr } from "../../../lib/format";
 import { TYPES } from "../constants";
-import { computePaceSecKm, createRunningWorkout, mapRunningWorkoutError } from "../runningService";
+import { computePaceSecKm, createRunningWorkout, mapRunningWorkoutError, updateRunningWorkout } from "../runningService";
 
 const corrida = modalityInfo("corrida");
 
+// Sem `initial`, mantém os campos de duração vazios (placeholder visível),
+// igual ao formulário de criação original.
+function durationParts(durationSec) {
+  if (!durationSec) return { h: "", m: "", s: "" };
+  return {
+    h: String(Math.floor(durationSec / 3600)),
+    m: String(Math.floor((durationSec % 3600) / 60)),
+    s: String(Math.floor(durationSec % 60)),
+  };
+}
+
 /* ---------------------------------------------------------
-   NEW WORKOUT FORM
+   WORKOUT FORM — cria um treino novo, ou edita um existente quando
+   `initial` é informado (mesmo formulário, só muda o serviço chamado).
 --------------------------------------------------------- */
-export function WorkoutForm({ onSave, onClose }) {
-  const [date, setDate] = useState(todayStr());
-  const [type, setType] = useState("rodagem");
-  const [distance, setDistance] = useState("");
-  const [durHour, setDurHour] = useState("");
-  const [durMin, setDurMin] = useState("");
-  const [durSec, setDurSec] = useState("");
-  const [hr, setHr] = useState("");
-  const [calories, setCalories] = useState("");
-  const [rpe, setRpe] = useState(5);
-  const [notes, setNotes] = useState("");
+export function WorkoutForm({ initial, onSave, onClose }) {
+  const isEdit = !!initial;
+  const initialDuration = durationParts(initial?.durationSec);
+
+  const [date, setDate] = useState(initial?.date ?? todayStr());
+  const [type, setType] = useState(initial?.type ?? "rodagem");
+  const [distance, setDistance] = useState(initial ? String(initial.distanceKm).replace(".", ",") : "");
+  const [durHour, setDurHour] = useState(initialDuration.h);
+  const [durMin, setDurMin] = useState(initialDuration.m);
+  const [durSec, setDurSec] = useState(initialDuration.s);
+  const [hr, setHr] = useState(initial?.avgHr != null ? String(initial.avgHr) : "");
+  const [calories, setCalories] = useState(initial?.calories != null ? String(initial.calories) : "");
+  const [rpe, setRpe] = useState(initial?.rpe ?? 5);
+  const [notes, setNotes] = useState(initial?.notes ?? "");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -49,7 +64,7 @@ export function WorkoutForm({ onSave, onClose }) {
     setError("");
     setSubmitting(true);
     try {
-      const createdWorkout = await createRunningWorkout({
+      const payload = {
         date,
         type,
         distanceKm: distNum,
@@ -58,17 +73,20 @@ export function WorkoutForm({ onSave, onClose }) {
         calories: calories ? parseInt(calories, 10) : null,
         rpe,
         notes: notes.trim() || null,
-      });
+      };
+      const savedWorkout = isEdit
+        ? await updateRunningWorkout(initial.id, payload)
+        : await createRunningWorkout(payload);
 
       setSubmitting(false);
       setSuccess(true);
 
       // usa o registro retornado pelo Supabase (id/created_at reais) para
       // incluir no estado compartilhado — nada de reconsultar a lista inteira
-      setTimeout(() => onSave(createdWorkout), 900);
+      setTimeout(() => onSave(savedWorkout), 900);
     } catch (err) {
       setSubmitting(false);
-      setError(mapRunningWorkoutError(err));
+      setError(mapRunningWorkoutError(err, isEdit ? "Não foi possível salvar as alterações. Tente novamente." : undefined));
     }
   }
 
@@ -80,7 +98,7 @@ export function WorkoutForm({ onSave, onClose }) {
       >
         <div className="flex items-center justify-between mb-5">
           <h2 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 700, fontSize: 20, color: C.white }}>
-            Novo treino
+            {isEdit ? "Editar treino" : "Novo treino"}
           </h2>
           <button onClick={onClose} disabled={busy} className="rounded-full p-1.5 disabled:opacity-40" style={{ color: C.gray }}>
             <X size={20} />
@@ -213,7 +231,7 @@ export function WorkoutForm({ onSave, onClose }) {
 
           {success && (
             <div className="flex items-center gap-2 text-sm" style={{ color: C.positive }}>
-              <CheckCircle2 size={16} /> Treino cadastrado com sucesso!
+              <CheckCircle2 size={16} /> {isEdit ? "Treino atualizado com sucesso!" : "Treino cadastrado com sucesso!"}
             </div>
           )}
 
@@ -223,7 +241,11 @@ export function WorkoutForm({ onSave, onClose }) {
             className="mt-1 w-full rounded-xl py-3 text-sm font-semibold disabled:opacity-60"
             style={{ background: `linear-gradient(135deg, ${corrida.color}, #00AEEF)`, color: C.bg }}
           >
-            {submitting ? "Salvando…" : success ? "Treino cadastrado!" : "Salvar treino"}
+            {submitting
+              ? "Salvando…"
+              : success
+                ? (isEdit ? "Treino atualizado!" : "Treino cadastrado!")
+                : (isEdit ? "Salvar alterações" : "Salvar treino")}
           </button>
         </div>
       </div>

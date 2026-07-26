@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { getRunningWorkouts, mapRunningWorkoutError } from "./runningService";
 
+/* Mesma ordenação usada pela consulta ao Supabase (data desc, created_at
+   desc em caso de empate) — reaplicada aqui sempre que o estado local muda
+   por fora de uma nova consulta (inclusão ou edição). */
+function sortWorkouts(list) {
+  return [...list].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return (b.createdAt || "").localeCompare(a.createdAt || "");
+  });
+}
+
 /* Busca os treinos reais de public.running_workouts e os compartilha, já no
    mesmo formato (camelCase) que Dashboard, AnalyticsTab, WorkoutRow e a Home
    (camada cruzada de modalidades) sempre consumiram — trocar só a origem
@@ -34,12 +44,20 @@ export function useWorkouts() {
   const addWorkout = useCallback((w) => {
     setWorkouts((prev) => {
       if (prev.some((existing) => existing.id === w.id)) return prev;
-      return [w, ...prev].sort((a, b) => {
-        if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-        return (b.createdAt || "").localeCompare(a.createdAt || "");
-      });
+      return sortWorkouts([w, ...prev]);
     });
   }, []);
 
-  return { workouts, loading, error, addWorkout, refetch: fetchWorkouts };
+  /* Substitui o registro editado pela versão já retornada pelo update
+     (mesmo raciocínio do addWorkout: nada de reconsultar a lista inteira) —
+     reordena porque a data editada pode ter mudado a posição do treino. */
+  const updateWorkout = useCallback((updated) => {
+    setWorkouts((prev) => sortWorkouts(prev.map((w) => (w.id === updated.id ? updated : w))));
+  }, []);
+
+  const removeWorkout = useCallback((id) => {
+    setWorkouts((prev) => prev.filter((w) => w.id !== id));
+  }, []);
+
+  return { workouts, loading, error, addWorkout, updateWorkout, removeWorkout, refetch: fetchWorkouts };
 }

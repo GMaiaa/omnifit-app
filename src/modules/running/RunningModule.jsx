@@ -6,6 +6,7 @@ import { WorkoutForm } from "./components/WorkoutForm";
 import { WorkoutRow } from "./components/WorkoutRow";
 import { Dashboard } from "./components/Dashboard";
 import { AnalyticsTab } from "./components/analytics/AnalyticsTab";
+import { deleteRunningWorkout, mapRunningWorkoutError } from "./runningService";
 
 const corrida = modalityInfo("corrida");
 
@@ -15,11 +16,29 @@ const SUB_NAV = [
   { id: "treinos", label: "Treinos", icon: ListChecks },
 ];
 
-export function RunningModule({ workouts, loading, error, addWorkout, refetch }) {
+export function RunningModule({ workouts, loading, error, addWorkout, updateWorkout, removeWorkout, refetch }) {
   const [tab, setTab] = useState("dashboard");
-  const [showForm, setShowForm] = useState(false);
+  const [formTarget, setFormTarget] = useState(null); // null | true (novo) | workout (edição)
+  const [actionError, setActionError] = useState("");
 
   const hasBlockingError = !!error && workouts.length === 0;
+
+  function handleFormSave(workout) {
+    if (formTarget && formTarget !== true) updateWorkout(workout);
+    else addWorkout(workout);
+    setFormTarget(null);
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm("Excluir este treino? Essa ação não pode ser desfeita.")) return;
+    setActionError("");
+    try {
+      await deleteRunningWorkout(id);
+      removeWorkout(id);
+    } catch (err) {
+      setActionError(mapRunningWorkoutError(err, "Não foi possível excluir o treino. Tente novamente."));
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -44,7 +63,7 @@ export function RunningModule({ workouts, loading, error, addWorkout, refetch })
           })}
         </nav>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => setFormTarget(true)}
           className="flex items-center gap-1.5 rounded-full px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold"
           style={{ background: `linear-gradient(135deg, ${corrida.color}, #00AEEF)`, color: C.bg }}
         >
@@ -83,23 +102,26 @@ export function RunningModule({ workouts, loading, error, addWorkout, refetch })
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {workouts.map((w) => <WorkoutRow key={w.id} w={w} />)}
+          {workouts.map((w) => (
+            <WorkoutRow key={w.id} w={w} onEdit={setFormTarget} onDelete={handleDelete} />
+          ))}
         </div>
       )}
 
-      {!hasBlockingError && error && workouts.length > 0 && (
+      {!hasBlockingError && (error || actionError) && workouts.length > 0 && (
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-xl px-4 py-2.5 text-sm z-50"
           style={{ background: `${C.danger}22`, color: C.danger, border: `1px solid ${C.danger}55` }}
         >
-          {error}
+          {error || actionError}
         </div>
       )}
 
-      {showForm && (
+      {formTarget && (
         <WorkoutForm
-          onSave={(w) => { addWorkout(w); setShowForm(false); }}
-          onClose={() => setShowForm(false)}
+          initial={formTarget === true ? null : formTarget}
+          onSave={handleFormSave}
+          onClose={() => setFormTarget(null)}
         />
       )}
     </div>

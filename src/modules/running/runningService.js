@@ -119,6 +119,60 @@ export async function createRunningWorkout({
   return mapWorkoutRow(data);
 }
 
+/* Atualiza um treino existente em public.running_workouts. Não filtra por
+   user_id no client: a política de RLS de update (auth.uid() = user_id) é
+   quem garante que só o dono do registro consegue alterá-lo — se o id
+   pertencer a outro usuário, a query simplesmente não afeta nenhuma linha e
+   o .single() abaixo lança, o que já cai no mapeamento de erro genérico. */
+export async function updateRunningWorkout(id, {
+  date, type, distanceKm, durationSec,
+  avgHr = null, calories = null, rpe = null, notes = null,
+}) {
+  const paceSecKm = computePaceSecKm(durationSec, distanceKm);
+  if (paceSecKm === null) {
+    throw new Error("INVALID_DISTANCE_OR_DURATION");
+  }
+
+  const { data, error } = await supabase
+    .from("running_workouts")
+    .update({
+      date,
+      type,
+      distance_km: distanceKm,
+      duration_sec: durationSec,
+      pace_sec_km: paceSecKm,
+      avg_hr: avgHr,
+      calories,
+      rpe,
+      notes,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    if (import.meta.env.DEV) console.error("[running_workouts] update falhou:", error);
+    throw error;
+  }
+
+  return mapWorkoutRow(data);
+}
+
+/* Exclui um treino de public.running_workouts. Mesma lógica de segurança do
+   update: a política de RLS de delete é quem restringe a exclusão ao dono
+   do registro, nada é filtrado por user_id aqui no client. */
+export async function deleteRunningWorkout(id) {
+  const { error } = await supabase
+    .from("running_workouts")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    if (import.meta.env.DEV) console.error("[running_workouts] delete falhou:", error);
+    throw error;
+  }
+}
+
 /* Traduz erros técnicos (auth ausente, RLS, constraints, rede) para
    mensagens amigáveis em português — o texto original do Supabase nunca
    chega até a UI. O fallback é parametrizável porque o mesmo mapeamento
