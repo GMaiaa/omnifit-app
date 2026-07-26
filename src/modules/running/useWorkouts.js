@@ -1,50 +1,45 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { STORAGE_KEY } from "./constants";
+import { useCallback, useEffect, useState } from "react";
+import { getRunningWorkouts, mapRunningWorkoutError } from "./runningService";
 
-/* Loads/persists Corrida workouts via window.storage and hands back the
-   list already sorted newest-first — the shape both the Home and the
-   Corrida module need. */
+/* Busca os treinos reais de public.running_workouts e os compartilha, já no
+   mesmo formato (camelCase) que Dashboard, AnalyticsTab, WorkoutRow e a Home
+   (camada cruzada de modalidades) sempre consumiram — trocar só a origem
+   dos dados aqui é o que basta para essas telas pararem de usar mock. */
 export function useWorkouts() {
   const [workouts, setWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [saveError, setSaveError] = useState("");
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await window.storage.get(STORAGE_KEY, false);
-        setWorkouts(res ? JSON.parse(res.value) : []);
-      } catch {
-        setWorkouts([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const persist = useCallback(async (next) => {
-    setWorkouts(next);
+  const fetchWorkouts = useCallback(async () => {
+    setLoading(true);
+    setError("");
     try {
-      const res = await window.storage.set(STORAGE_KEY, JSON.stringify(next), false);
-      if (!res) setSaveError("Não foi possível salvar. Tente novamente.");
-      else setSaveError("");
-    } catch {
-      setSaveError("Não foi possível salvar. Tente novamente.");
+      const rows = await getRunningWorkouts();
+      setWorkouts(rows);
+    } catch (err) {
+      setError(mapRunningWorkoutError(err, "Não foi possível carregar seus treinos. Tente novamente."));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
+  useEffect(() => {
+    fetchWorkouts();
+  }, [fetchWorkouts]);
+
+  /* Inclusão direta no estado compartilhado após um cadastro bem-sucedido —
+     evita uma segunda consulta ao Supabase. Usa o registro retornado pelo
+     insert (id/created_at reais), deduplica por id e preserva a mesma
+     ordenação da consulta (data desc, created_at desc em caso de empate). */
   const addWorkout = useCallback((w) => {
-    persist([w, ...workouts].sort((a, b) => (a.date < b.date ? 1 : -1)));
-  }, [workouts, persist]);
+    setWorkouts((prev) => {
+      if (prev.some((existing) => existing.id === w.id)) return prev;
+      return [w, ...prev].sort((a, b) => {
+        if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+        return (b.createdAt || "").localeCompare(a.createdAt || "");
+      });
+    });
+  }, []);
 
-  const deleteWorkout = useCallback((id) => {
-    persist(workouts.filter((w) => w.id !== id));
-  }, [workouts, persist]);
-
-  const sorted = useMemo(
-    () => [...workouts].sort((a, b) => (a.date < b.date ? 1 : -1)),
-    [workouts]
-  );
-
-  return { workouts: sorted, loading, saveError, addWorkout, deleteWorkout };
+  return { workouts, loading, error, addWorkout, refetch: fetchWorkouts };
 }

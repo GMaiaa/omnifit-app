@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { CheckCircle2, Gauge, X } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
-import { fmtPace, todayStr, uid } from "../../../lib/format";
+import { fmtPace, todayStr } from "../../../lib/format";
 import { TYPES } from "../constants";
 import { computePaceSecKm, createRunningWorkout, mapRunningWorkoutError } from "../runningService";
 
@@ -14,6 +14,7 @@ export function WorkoutForm({ onSave, onClose }) {
   const [date, setDate] = useState(todayStr());
   const [type, setType] = useState("rodagem");
   const [distance, setDistance] = useState("");
+  const [durHour, setDurHour] = useState("");
   const [durMin, setDurMin] = useState("");
   const [durSec, setDurSec] = useState("");
   const [hr, setHr] = useState("");
@@ -25,9 +26,10 @@ export function WorkoutForm({ onSave, onClose }) {
   const [success, setSuccess] = useState(false);
 
   const distNum = parseFloat(distance.replace(",", "."));
+  const hourNum = durHour === "" ? 0 : parseInt(durHour, 10);
   const minNum = durMin === "" ? 0 : parseInt(durMin, 10);
   const secNum = durSec === "" ? 0 : parseInt(durSec, 10);
-  const totalSec = minNum * 60 + secNum;
+  const totalSec = hourNum * 3600 + minNum * 60 + secNum;
   const paceLive = computePaceSecKm(totalSec, distNum);
   const busy = submitting || success;
 
@@ -37,7 +39,8 @@ export function WorkoutForm({ onSave, onClose }) {
     if (!date) return setError("Informe a data do treino.");
     if (!type) return setError("Selecione o tipo de treino.");
     if (!distNum || distNum <= 0) return setError("Informe uma distância válida.");
-    if (minNum < 0) return setError("Os minutos não podem ser negativos.");
+    if (hourNum < 0) return setError("As horas não podem ser negativas.");
+    if (minNum < 0 || minNum > 59) return setError("Os minutos devem estar entre 0 e 59.");
     if (secNum < 0 || secNum > 59) return setError("Os segundos devem estar entre 0 e 59.");
     if (!totalSec || totalSec <= 0) return setError("Informe o tempo do treino.");
     if (hr && parseInt(hr, 10) <= 0) return setError("Informe uma frequência cardíaca válida.");
@@ -46,7 +49,7 @@ export function WorkoutForm({ onSave, onClose }) {
     setError("");
     setSubmitting(true);
     try {
-      await createRunningWorkout({
+      const createdWorkout = await createRunningWorkout({
         date,
         type,
         distanceKm: distNum,
@@ -60,19 +63,9 @@ export function WorkoutForm({ onSave, onClose }) {
       setSubmitting(false);
       setSuccess(true);
 
-      // mantém o comportamento já existente (lista mockada local) só depois
-      // que o cadastro real no Supabase foi confirmado
-      const localWorkout = {
-        id: uid(),
-        date,
-        type,
-        distanceKm: distNum,
-        durationSec: totalSec,
-        avgHr: hr ? parseInt(hr, 10) : null,
-        rpe,
-        notes: notes.trim(),
-      };
-      setTimeout(() => onSave(localWorkout), 900);
+      // usa o registro retornado pelo Supabase (id/created_at reais) para
+      // incluir no estado compartilhado — nada de reconsultar a lista inteira
+      setTimeout(() => onSave(createdWorkout), 900);
     } catch (err) {
       setSubmitting(false);
       setError(mapRunningWorkoutError(err));
@@ -126,36 +119,43 @@ export function WorkoutForm({ onSave, onClose }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold" style={{ color: C.gray }}>Distância (km)</label>
+          <div>
+            <label className="text-xs font-semibold" style={{ color: C.gray }}>Distância (km)</label>
+            <input
+              type="text" inputMode="decimal" placeholder="5,00" value={distance}
+              onChange={(e) => setDistance(e.target.value)}
+              disabled={busy}
+              className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-60"
+              style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold" style={{ color: C.gray }}>Duração (h:min:seg)</label>
+            <div className="mt-1 flex items-center gap-1">
               <input
-                type="text" inputMode="decimal" placeholder="5,00" value={distance}
-                onChange={(e) => setDistance(e.target.value)}
+                type="number" min="0" placeholder="h" value={durHour}
+                onChange={(e) => setDurHour(e.target.value)}
                 disabled={busy}
-                className="mt-1 w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-60"
+                className="w-full rounded-xl px-3 py-2.5 text-sm text-center outline-none disabled:opacity-60"
                 style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
               />
-            </div>
-            <div>
-              <label className="text-xs font-semibold" style={{ color: C.gray }}>Duração</label>
-              <div className="mt-1 flex items-center gap-1">
-                <input
-                  type="number" min="0" placeholder="min" value={durMin}
-                  onChange={(e) => setDurMin(e.target.value)}
-                  disabled={busy}
-                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-60"
-                  style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
-                />
-                <span style={{ color: C.gray }}>:</span>
-                <input
-                  type="number" min="0" max="59" placeholder="seg" value={durSec}
-                  onChange={(e) => setDurSec(e.target.value)}
-                  disabled={busy}
-                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none disabled:opacity-60"
-                  style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
-                />
-              </div>
+              <span style={{ color: C.gray }}>:</span>
+              <input
+                type="number" min="0" max="59" placeholder="min" value={durMin}
+                onChange={(e) => setDurMin(e.target.value)}
+                disabled={busy}
+                className="w-full rounded-xl px-3 py-2.5 text-sm text-center outline-none disabled:opacity-60"
+                style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
+              />
+              <span style={{ color: C.gray }}>:</span>
+              <input
+                type="number" min="0" max="59" placeholder="seg" value={durSec}
+                onChange={(e) => setDurSec(e.target.value)}
+                disabled={busy}
+                className="w-full rounded-xl px-3 py-2.5 text-sm text-center outline-none disabled:opacity-60"
+                style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
+              />
             </div>
           </div>
 

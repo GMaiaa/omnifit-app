@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { LayoutDashboard, ListChecks, BarChart3, PlusCircle } from "lucide-react";
+import { AlertTriangle, LayoutDashboard, ListChecks, BarChart3, PlusCircle } from "lucide-react";
 import { C, modalityInfo } from "../../lib/theme";
-import { EmptyState } from "../../components/ui";
+import { Card, EmptyState } from "../../components/ui";
 import { WorkoutForm } from "./components/WorkoutForm";
 import { WorkoutRow } from "./components/WorkoutRow";
 import { Dashboard } from "./components/Dashboard";
@@ -15,9 +15,11 @@ const SUB_NAV = [
   { id: "treinos", label: "Treinos", icon: ListChecks },
 ];
 
-export function RunningModule({ workouts, loading, saveError, addWorkout, deleteWorkout }) {
+export function RunningModule({ workouts, loading, error, addWorkout, refetch }) {
   const [tab, setTab] = useState("dashboard");
   const [showForm, setShowForm] = useState(false);
+
+  const hasBlockingError = !!error && workouts.length === 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -52,6 +54,23 @@ export function RunningModule({ workouts, loading, saveError, addWorkout, delete
 
       {loading ? (
         <div className="flex justify-center py-20" style={{ color: C.gray }}>Carregando…</div>
+      ) : hasBlockingError ? (
+        <Card className="flex flex-col items-center justify-center text-center py-16 gap-3">
+          <div className="rounded-full p-4" style={{ background: `${C.danger}14` }}>
+            <AlertTriangle size={26} style={{ color: C.danger }} />
+          </div>
+          <h3 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 600, color: C.white, fontSize: 17 }}>
+            Não foi possível carregar seus treinos
+          </h3>
+          <p style={{ color: C.gray, fontSize: 14, maxWidth: 320 }}>{error}</p>
+          <button
+            onClick={refetch}
+            className="rounded-full px-4 py-2 text-xs font-semibold"
+            style={{ background: `linear-gradient(135deg, ${corrida.color}, #00AEEF)`, color: C.bg }}
+          >
+            Tentar novamente
+          </button>
+        </Card>
       ) : tab === "dashboard" ? (
         <Dashboard workouts={workouts} />
       ) : tab === "analytics" ? (
@@ -59,21 +78,21 @@ export function RunningModule({ workouts, loading, saveError, addWorkout, delete
       ) : workouts.length === 0 ? (
         <EmptyState
           icon={ListChecks}
-          title="Sua lista de treinos está vazia"
+          title="Você ainda não registrou nenhum treino de corrida."
           description='Toque em "Novo treino" para registrar sua primeira corrida.'
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {workouts.map((w) => <WorkoutRow key={w.id} w={w} onDelete={deleteWorkout} />)}
+          {workouts.map((w) => <WorkoutRow key={w.id} w={w} />)}
         </div>
       )}
 
-      {saveError && (
+      {!hasBlockingError && error && workouts.length > 0 && (
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-xl px-4 py-2.5 text-sm z-50"
           style={{ background: `${C.danger}22`, color: C.danger, border: `1px solid ${C.danger}55` }}
         >
-          {saveError}
+          {error}
         </div>
       )}
 

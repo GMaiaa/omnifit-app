@@ -1,6 +1,7 @@
 import { HeartPulse, Trash2 } from "lucide-react";
 import { C } from "../../../lib/theme";
-import { fmtDateShort, fmtDuration, fmtPace } from "../../../lib/format";
+import { fmtDateShort, fmtPace } from "../../../lib/format";
+import { formatDurationHMS } from "../format";
 import { typeInfo } from "../constants";
 import { Pill } from "../../../components/ui";
 
@@ -9,7 +10,9 @@ import { Pill } from "../../../components/ui";
 --------------------------------------------------------- */
 export function WorkoutRow({ w, onDelete }) {
   const t = typeInfo(w.type);
-  const pace = w.durationSec / w.distanceKm;
+  // Protege registros antigos: usa o pace salvo no banco (já mapeado por
+  // runningService) e só recalcula localmente se ele vier ausente/inválido.
+  const pace = w.paceSecKm ?? (w.distanceKm > 0 ? w.durationSec / w.distanceKm : null);
   return (
     <div
       className="flex items-center gap-3 rounded-xl px-3 py-3"
@@ -21,26 +24,34 @@ export function WorkoutRow({ w, onDelete }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <Pill color={t.color}>{t.label}</Pill>
-          {w.rpe && <span style={{ color: C.gray, fontSize: 11 }}>RPE {w.rpe}</span>}
+          {w.rpe != null && <span style={{ color: C.gray, fontSize: 11 }}>RPE {w.rpe}/10</span>}
         </div>
         <div className="flex items-center gap-3 mt-1 text-sm flex-wrap" style={{ color: C.white }}>
           <span>{w.distanceKm.toLocaleString("pt-BR")} km</span>
           <span style={{ color: C.gray }}>•</span>
-          <span>{fmtDuration(w.durationSec)}</span>
+          <span>{formatDurationHMS(w.durationSec)}</span>
           <span style={{ color: C.gray }}>•</span>
-          <span>{fmtPace(pace)} /km</span>
-          {w.avgHr && (
+          <span>{pace ? `${fmtPace(pace)} /km` : "—"}</span>
+          {w.avgHr != null && (
             <>
               <span style={{ color: C.gray }}>•</span>
               <span className="flex items-center gap-1"><HeartPulse size={12} style={{ color: C.danger }} />{w.avgHr}</span>
             </>
           )}
+          {w.calories != null && (
+            <>
+              <span style={{ color: C.gray }}>•</span>
+              <span>{w.calories} kcal</span>
+            </>
+          )}
         </div>
         {w.notes && <div className="mt-1 text-xs truncate" style={{ color: C.gray }}>{w.notes}</div>}
       </div>
-      <button onClick={() => onDelete(w.id)} className="p-1.5 rounded-lg flex-shrink-0" style={{ color: C.gray }}>
-        <Trash2 size={16} />
-      </button>
+      {onDelete && (
+        <button onClick={() => onDelete(w.id)} className="p-1.5 rounded-lg flex-shrink-0" style={{ color: C.gray }}>
+          <Trash2 size={16} />
+        </button>
+      )}
     </div>
   );
 }
