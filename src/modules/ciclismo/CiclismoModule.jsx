@@ -15,9 +15,9 @@ const SUB_NAV = [
   { id: "treinos", label: "Treinos", icon: ListChecks },
 ];
 
-export function CiclismoModule({ workouts, loading, saveError, addWorkout, deleteWorkout }) {
+export function CiclismoModule({ workouts, loading, saveError, addWorkout, deleteWorkout, startWithFormOpen }) {
   const [tab, setTab] = useState("dashboard");
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(!!startWithFormOpen);
 
   return (
     <div className="flex flex-col gap-4">
@@ -71,7 +71,7 @@ export function CiclismoModule({ workouts, loading, saveError, addWorkout, delet
       {saveError && (
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-xl px-4 py-2.5 text-sm z-50"
-          style={{ background: `${C.danger}22`, color: C.danger, border: `1px solid ${C.danger}55` }}
+          style={{ background: `color-mix(in srgb, ${C.danger} 13%, transparent)`, color: C.danger, border: `1px solid color-mix(in srgb, ${C.danger} 33%, transparent)` }}
         >
           {saveError}
         </div>

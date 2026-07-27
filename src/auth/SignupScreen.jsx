@@ -73,7 +73,7 @@ export function SignupScreen({ onBack }) {
     return (
       <AuthShell>
         <div className="w-full flex flex-col items-center text-center gap-3 py-2">
-          <div className="rounded-full p-3.5" style={{ background: `${C.positive}14` }}>
+          <div className="rounded-full p-3.5" style={{ background: `color-mix(in srgb, ${C.positive} 8%, transparent)` }}>
             <MailCheck size={26} style={{ color: C.positive }} />
           </div>
           <h1 style={{ fontWeight: 700, fontSize: 19, color: C.white }}>Verifique seu e-mail</h1>
@@ -140,7 +140,7 @@ export function SignupScreen({ onBack }) {
           <div
             role="alert"
             className="flex items-start gap-2 rounded-xl px-3.5 py-3"
-            style={{ background: `${C.danger}18`, border: `1px solid ${C.danger}44` }}
+            style={{ background: `color-mix(in srgb, ${C.danger} 9%, transparent)`, border: `1px solid color-mix(in srgb, ${C.danger} 27%, transparent)` }}
           >
             <AlertCircle size={15} style={{ color: C.danger, marginTop: 1, flexShrink: 0 }} />
             <span className="text-xs" style={{ color: C.danger, lineHeight: 1.4 }}>{formError}</span>

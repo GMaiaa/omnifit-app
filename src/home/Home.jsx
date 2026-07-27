@@ -1,8 +1,8 @@
-import { useMemo } from "react";
-import { Lock, Target } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Bike, Dumbbell, Flame, Footprints, LayoutGrid, ListChecks, Lock, Target, Waves } from "lucide-react";
 import { C, MODALITIES, modalityInfo } from "../lib/theme";
-import { addDays, fmtDuration, mondayOf, todayStr } from "../lib/format";
-import { Card, CardHeader } from "../components/ui";
+import { addDays, fmtDateShort, fmtDistanceM, fmtDuration, mondayOf, todayStr } from "../lib/format";
+import { Card, CardHeader, EmptyState, Pill } from "../components/ui";
 import {
   consistency,
   dominantType,
@@ -10,7 +10,7 @@ import {
   volumeByType,
   weeklyVolume,
 } from "../modules/running/analytics";
-import { typeInfo } from "../modules/running/constants";
+import { typeInfo as runningTypeInfo } from "../modules/running/constants";
 import { InsightsPanel } from "../modules/running/components/analytics/InsightsPanel";
 import { ConsistencyCard } from "../modules/running/components/analytics/ConsistencyCard";
 import { PaceEvolutionCard } from "../modules/running/components/analytics/PaceEvolutionCard";
@@ -26,7 +26,7 @@ import {
   paceTrendByStroke,
   weeklyVolume as swimWeeklyVolume,
 } from "../modules/swimming/analytics";
-import { strokeInfo } from "../modules/swimming/constants";
+import { strokeInfo, typeInfo as swimTypeInfo } from "../modules/swimming/constants";
 import {
   consistency as hyroxConsistency,
   exerciseOptions as hyroxExerciseOptions,
@@ -44,6 +44,12 @@ import { typeInfo as cyclingTypeInfo } from "../modules/ciclismo/constants";
 import { ScoreGauge } from "./ScoreGauge";
 
 const corrida = modalityInfo("corrida");
+const MODALITY_ICONS = { Footprints, Dumbbell, Bike, Waves, Flame };
+
+const HOME_SUB_NAV = [
+  { id: "geral", label: "Geral", icon: LayoutGrid },
+  { id: "atividades", label: "Últimas atividades", icon: ListChecks },
+];
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
@@ -82,7 +88,7 @@ function runningSubScores(workouts) {
       load: vol.avgKm > 0 ? `${currentWeekKm.toFixed(1)} km vs. média de ${vol.avgKm.toFixed(1)} km` : "sem histórico ainda",
       progression: trend.paceChangePct === null
         ? "sem dado suficiente em Corrida"
-        : `${trend.paceChangePct < 0 ? "melhorando" : "piorando"} ${Math.abs(trend.paceChangePct).toFixed(1)}% em ${typeInfo(dom).label}`,
+        : `${trend.paceChangePct < 0 ? "melhorando" : "piorando"} ${Math.abs(trend.paceChangePct).toFixed(1)}% em ${runningTypeInfo(dom).label}`,
     },
   };
 }
@@ -238,6 +244,7 @@ function useGlobalScore(workouts, strengthSessions, swimWorkouts, hyroxSessions,
 }
 
 export function Home({ workouts, strengthSessions = [], swimWorkouts = [], hyroxSessions = [], cyclingWorkouts = [], onOpenModule }) {
+  const [homeTab, setHomeTab] = useState("geral");
   const { score, dominantTypeId, subScores } = useGlobalScore(workouts, strengthSessions, swimWorkouts, hyroxSessions, cyclingWorkouts);
 
   const vol8 = useMemo(() => weeklyVolume(workouts, 8), [workouts]);
@@ -294,8 +301,103 @@ export function Home({ workouts, strengthSessions = [], swimWorkouts = [], hyrox
   const effortSplit = useMemo(() => volumeByType(workouts), [workouts]);
   const effortTotal = effortSplit.reduce((a, d) => a + d.value, 0);
 
+  /* Feed unificado pra aba "Últimas atividades" — cada modalidade entra com
+     seu próprio título (tipo/estilo quando existe, nome do template quando
+     não) e o detalhe que fizer sentido pra unidade dela (km, metros...). */
+  const activities = useMemo(() => {
+    const items = [
+      ...workouts.map((w) => ({
+        id: `corrida-${w.id}`, date: w.date, modalityId: "corrida", durationSec: w.durationSec,
+        title: runningTypeInfo(w.type).label, detail: `${w.distanceKm.toLocaleString("pt-BR")} km`,
+      })),
+      ...strengthSessions.map((s) => ({
+        id: `musculacao-${s.id}`, date: s.date, modalityId: "musculacao", durationSec: s.durationSec,
+        title: s.templateName || "Treino de musculação", detail: null,
+      })),
+      ...swimWorkouts.map((w) => ({
+        id: `natacao-${w.id}`, date: w.date, modalityId: "natacao", durationSec: w.durationSec,
+        title: swimTypeInfo(w.type).label, detail: fmtDistanceM(w.distanceM),
+      })),
+      ...hyroxSessions.map((s) => ({
+        id: `hyrox-${s.id}`, date: s.date, modalityId: "hyrox", durationSec: s.durationSec,
+        title: s.templateName || "Treino HYROX", detail: null,
+      })),
+      ...cyclingWorkouts.map((w) => ({
+        id: `ciclismo-${w.id}`, date: w.date, modalityId: "ciclismo", durationSec: w.durationSec,
+        title: cyclingTypeInfo(w.type).label, detail: `${w.distanceKm.toLocaleString("pt-BR")} km`,
+      })),
+    ];
+    return items.sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 20);
+  }, [workouts, strengthSessions, swimWorkouts, hyroxSessions, cyclingWorkouts]);
+
   return (
     <div className="flex flex-col gap-5">
+      <nav className="flex items-center gap-1" style={{ borderBottom: `1px solid ${C.borderSoft}` }}>
+        {HOME_SUB_NAV.map((n) => {
+          const active = homeTab === n.id;
+          return (
+            <button
+              key={n.id}
+              onClick={() => setHomeTab(n.id)}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-semibold rounded-t-lg whitespace-nowrap"
+              style={{
+                color: active ? C.positive : C.gray,
+                borderBottom: active ? `2px solid ${C.positive}` : "2px solid transparent",
+                marginBottom: -1,
+              }}
+            >
+              <n.icon size={16} /> {n.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {homeTab === "atividades" ? (
+        activities.length === 0 ? (
+          <EmptyState
+            icon={ListChecks}
+            title="Nenhuma atividade registrada ainda"
+            description="Assim que você registrar treinos em qualquer modalidade, eles aparecem aqui juntos, do mais recente pro mais antigo."
+          />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {activities.map((a) => {
+              const modality = modalityInfo(a.modalityId);
+              const Icon = MODALITY_ICONS[modality.icon];
+              return (
+                <div
+                  key={a.id}
+                  className="flex items-center gap-3 rounded-xl px-3 py-3"
+                  style={{ background: C.surface2, border: `1px solid ${C.borderSoft}` }}
+                >
+                  <div className="flex flex-col items-center justify-center rounded-lg px-2 py-1.5" style={{ background: C.surface, minWidth: 52 }}>
+                    <span style={{ color: C.gray, fontSize: 10 }}>{fmtDateShort(a.date)}</span>
+                  </div>
+                  <div className="rounded-lg p-1.5 flex-shrink-0" style={{ background: `${modality.color}1A`, color: modality.color }}>
+                    <Icon size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Pill color={modality.color}>{modality.label}</Pill>
+                      <span style={{ color: C.white, fontSize: 13, fontWeight: 600 }}>{a.title}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-sm flex-wrap" style={{ color: C.gray }}>
+                      <span>{fmtDuration(a.durationSec)}</span>
+                      {a.detail && (
+                        <>
+                          <span>•</span>
+                          <span>{a.detail}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      ) : (
+      <>
       <Card>
         <CardHeader title="Performance geral" description={scoreDescription} />
         <ScoreGauge score={score} subScores={subScores} />
@@ -394,7 +496,7 @@ export function Home({ workouts, strengthSessions = [], swimWorkouts = [], hyrox
         </Card>
 
         <Card className="flex flex-col items-center justify-center text-center gap-3 py-8">
-          <div className="rounded-full p-3" style={{ background: `${C.gray}1A` }}>
+          <div className="rounded-full p-3" style={{ background: `color-mix(in srgb, ${C.gray} 10%, transparent)` }}>
             <Target size={22} style={{ color: C.gray }} />
           </div>
           <h3 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 600, color: C.white, fontSize: 15 }}>Metas — em breve</h3>
@@ -403,6 +505,8 @@ export function Home({ workouts, strengthSessions = [], swimWorkouts = [], hyrox
           </p>
         </Card>
       </div>
+      </>
+      )}
     </div>
   );
 }

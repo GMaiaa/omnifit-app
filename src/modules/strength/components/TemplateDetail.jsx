@@ -27,7 +27,7 @@ export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, 
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto" style={{ background: C.bg }}>
-      <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-3.5" style={{ background: `${C.bg}F2`, borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-3.5" style={{ background: `color-mix(in srgb, ${C.bg} 95%, transparent)`, borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
         <div className="flex items-center gap-3 min-w-0">
           <button onClick={onClose} className="p-1.5 rounded-full flex-shrink-0" style={{ color: C.gray }}>
             <ArrowLeft size={20} />

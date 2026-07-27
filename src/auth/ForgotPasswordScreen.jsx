@@ -46,7 +46,7 @@ export function ForgotPasswordScreen({ onBack }) {
 
       {sent ? (
         <div className="w-full flex flex-col items-center text-center gap-3 py-2">
-          <div className="rounded-full p-3.5" style={{ background: `${C.positive}14` }}>
+          <div className="rounded-full p-3.5" style={{ background: `color-mix(in srgb, ${C.positive} 8%, transparent)` }}>
             <MailCheck size={26} style={{ color: C.positive }} />
           </div>
           <h1 style={{ fontWeight: 700, fontSize: 19, color: C.white }}>Verifique seu e-mail</h1>

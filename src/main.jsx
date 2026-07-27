@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import AuthGate from './AuthGate.jsx'
 import { AuthProvider } from './auth/AuthContext'
+import { applyTheme, getInitialTheme } from './lib/themeMode'
+
+applyTheme(getInitialTheme())
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

@@ -1,12 +1,49 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,800&display=swap');
+@import "tailwindcss";
 
+/* ---------------------------------------------------------
+   TEMA CLARO/ESCURO — variáveis CSS por trás de lib/theme.js `C`.
+   Componentes continuam lendo C.bg/C.white/etc. como sempre; só o
+   VALOR de cada token muda conforme [data-theme] na raiz do documento.
+   Cores de marca/modalidade (theme.js MODALITIES, TYPES de cada módulo)
+   ficam de fora de propósito — são identidade visual, não dependem do tema.
+--------------------------------------------------------- */
 :root {
   color-scheme: dark;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  --omni-bg: #0B1220;
+  --omni-bg-soft: #0F172A;
+  --omni-surface: #131D30;
+  --omni-surface-2: #182238;
+  --omni-border: #22304A;
+  --omni-border-soft: #1C2A42;
+  --omni-gray: #6B7280;
+  --omni-white: #F8FAFC;
+  --omni-danger: #F87171;
+  --omni-amber: #FBBF24;
+  --omni-positive: #00E0B2;
+  --omni-date-icon-filter: invert(0.7);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --omni-bg: #F4F6FA;
+  --omni-bg-soft: #FFFFFF;
+  --omni-surface: #FFFFFF;
+  --omni-surface-2: #F1F4F9;
+  --omni-border: #E1E7EF;
+  --omni-border-soft: #EBEFF5;
+  --omni-gray: #64748B;
+  --omni-white: #0F172A;
+  --omni-danger: #DC2626;
+  --omni-amber: #B45309;
+  --omni-positive: #00A884;
+  --omni-date-icon-filter: none;
 }
 
 * {
@@ -27,10 +64,10 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #22304A;
+  background: var(--omni-border);
   border-radius: 3px;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.7);
+  filter: var(--omni-date-icon-filter);
 }

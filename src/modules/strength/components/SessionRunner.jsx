@@ -230,7 +230,7 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: C.bg }}>
-      <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-3.5" style={{ background: `${C.bg}F2`, borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-3.5" style={{ background: `color-mix(in srgb, ${C.bg} 95%, transparent)`, borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
         <div className="flex items-center gap-3 min-w-0">
           <button onClick={handleClose} disabled={saving} className="p-1.5 rounded-full flex-shrink-0 disabled:opacity-40" style={{ color: C.gray }}>
             <X size={20} />
@@ -339,7 +339,7 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
         {error && <div className="text-sm text-center" style={{ color: C.danger }}>{error}</div>}
       </div>
 
-      <div className="sticky bottom-0 px-4 sm:px-6 py-4" style={{ background: `${C.bg}F2`, borderTop: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
+      <div className="sticky bottom-0 px-4 sm:px-6 py-4" style={{ background: `color-mix(in srgb, ${C.bg} 95%, transparent)`, borderTop: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
         <button
           onClick={handleFinish}
           disabled={saving}

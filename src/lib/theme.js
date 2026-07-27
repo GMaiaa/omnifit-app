@@ -1,21 +1,29 @@
 /* ---------------------------------------------------------
    DESIGN TOKENS — Omnifit brand system
+
+   Cada valor aponta pra uma CSS custom property (ver src/index.css) em vez
+   de um hex fixo — o valor real muda com [data-theme] na raiz do documento,
+   então todo componente que já usa C.bg/C.white/etc. ganha o tema claro/
+   escuro de graça, sem precisar saber que o tema existe. `C.white` continua
+   se chamando "white" por história (era literalmente branco no único tema
+   que existia), mas hoje representa "cor de texto primário" — no tema claro
+   essa variável vale um tom escuro, não branco.
 --------------------------------------------------------- */
 export const C = {
-  bg: "#0B1220",
-  bgSoft: "#0F172A",
-  surface: "#131D30",
-  surface2: "#182238",
-  border: "#22304A",
-  borderSoft: "#1C2A42",
-  gray: "#6B7280",
-  white: "#F8FAFC",
-  danger: "#F87171",
-  amber: "#FBBF24",
+  bg: "var(--omni-bg)",
+  bgSoft: "var(--omni-bg-soft)",
+  surface: "var(--omni-surface)",
+  surface2: "var(--omni-surface-2)",
+  border: "var(--omni-border)",
+  borderSoft: "var(--omni-border-soft)",
+  gray: "var(--omni-gray)",
+  white: "var(--omni-white)",
+  danger: "var(--omni-danger)",
+  amber: "var(--omni-amber)",
   /* Sport-agnostic "improvement" semantic (deltas, positive trends) — not to
      be confused with a modality color, even though it visually matches
      Corrida's teal today. */
-  positive: "#00E0B2",
+  positive: "var(--omni-positive)",
 };
 
 /* Gradient of the Omnifit infinity mark (teal -> purple -> orange). Reserved

@@ -119,7 +119,7 @@ export function LoginScreen({ onSignup, onForgot }) {
           <div
             role="alert"
             className="flex items-start gap-2 rounded-xl px-3.5 py-3"
-            style={{ background: `${C.danger}18`, border: `1px solid ${C.danger}44` }}
+            style={{ background: `color-mix(in srgb, ${C.danger} 9%, transparent)`, border: `1px solid color-mix(in srgb, ${C.danger} 27%, transparent)` }}
           >
             <AlertCircle size={15} style={{ color: C.danger, marginTop: 1, flexShrink: 0 }} />
             <span className="text-xs" style={{ color: C.danger, lineHeight: 1.4 }}>{formError}</span>
