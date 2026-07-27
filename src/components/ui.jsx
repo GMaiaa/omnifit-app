@@ -89,7 +89,7 @@ export function Pill({ children, color }) {
 export function EmptyState({ icon: Icon, title, description }) {
   return (
     <Card className="flex flex-col items-center justify-center text-center py-16 gap-3">
-      <div className="rounded-full p-4" style={{ background: `${C.positive}14` }}>
+      <div className="rounded-full p-4" style={{ background: `color-mix(in srgb, ${C.positive} 8%, transparent)` }}>
         <Icon size={26} style={{ color: C.positive }} />
       </div>
       <h3 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 600, color: C.white, fontSize: 17 }}>

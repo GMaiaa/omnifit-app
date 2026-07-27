@@ -333,7 +333,7 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: C.bg }}>
-      <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-3.5" style={{ background: `${C.bg}F2`, borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
+      <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-3.5" style={{ background: `color-mix(in srgb, ${C.bg} 95%, transparent)`, borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
         <div className="flex items-center gap-3 min-w-0">
           <button onClick={handleClose} className="p-1.5 rounded-full flex-shrink-0" style={{ color: C.gray }}>
             <X size={20} />
@@ -397,7 +397,7 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
                 disabled={!!b.finishedAt}
                 className="mb-3 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
                 style={{
-                  background: inProgress ? `${C.danger}22` : `${hyrox.color}22`,
+                  background: inProgress ? `color-mix(in srgb, ${C.danger} 13%, transparent)` : `${hyrox.color}22`,
                   color: inProgress ? C.danger : hyrox.color,
                 }}
               >
@@ -463,7 +463,7 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
         {error && <div className="text-sm text-center" style={{ color: C.danger }}>{error}</div>}
       </div>
 
-      <div className="sticky bottom-0 px-4 sm:px-6 py-4" style={{ background: `${C.bg}F2`, borderTop: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
+      <div className="sticky bottom-0 px-4 sm:px-6 py-4" style={{ background: `color-mix(in srgb, ${C.bg} 95%, transparent)`, borderTop: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
         <button
           onClick={handleFinish}
           className="w-full max-w-2xl mx-auto flex items-center justify-center rounded-xl py-3.5 text-sm font-semibold"

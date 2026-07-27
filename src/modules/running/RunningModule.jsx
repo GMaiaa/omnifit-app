@@ -16,9 +16,9 @@ const SUB_NAV = [
   { id: "treinos", label: "Treinos", icon: ListChecks },
 ];
 
-export function RunningModule({ workouts, loading, error, addWorkout, updateWorkout, removeWorkout, refetch }) {
+export function RunningModule({ workouts, loading, error, addWorkout, updateWorkout, removeWorkout, refetch, startWithFormOpen }) {
   const [tab, setTab] = useState("dashboard");
-  const [formTarget, setFormTarget] = useState(null); // null | true (novo) | workout (edição)
+  const [formTarget, setFormTarget] = useState(startWithFormOpen ? true : null); // null | true (novo) | workout (edição)
   const [actionError, setActionError] = useState("");
 
   const hasBlockingError = !!error && workouts.length === 0;
@@ -75,7 +75,7 @@ export function RunningModule({ workouts, loading, error, addWorkout, updateWork
         <div className="flex justify-center py-20" style={{ color: C.gray }}>Carregando…</div>
       ) : hasBlockingError ? (
         <Card className="flex flex-col items-center justify-center text-center py-16 gap-3">
-          <div className="rounded-full p-4" style={{ background: `${C.danger}14` }}>
+          <div className="rounded-full p-4" style={{ background: `color-mix(in srgb, ${C.danger} 8%, transparent)` }}>
             <AlertTriangle size={26} style={{ color: C.danger }} />
           </div>
           <h3 style={{ fontFamily: "'Poppins', sans-serif", fontWeight: 600, color: C.white, fontSize: 17 }}>
@@ -111,7 +111,7 @@ export function RunningModule({ workouts, loading, error, addWorkout, updateWork
       {!hasBlockingError && (error || actionError) && workouts.length > 0 && (
         <div
           className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-xl px-4 py-2.5 text-sm z-50"
-          style={{ background: `${C.danger}22`, color: C.danger, border: `1px solid ${C.danger}55` }}
+          style={{ background: `color-mix(in srgb, ${C.danger} 13%, transparent)`, color: C.danger, border: `1px solid color-mix(in srgb, ${C.danger} 33%, transparent)` }}
         >
           {error || actionError}
         </div>
