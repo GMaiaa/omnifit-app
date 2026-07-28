@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Bell, ChevronDown, Dumbbell, Bike, Waves, Flame, Footprints, Lock, LogOut, Moon, Plus, Settings, Sun, User as UserIcon,
+  ChevronDown, Dumbbell, Bike, Waves, Flame, Footprints, Lock, LogOut, Moon, Plus, Settings, Sun, User as UserIcon,
 } from "lucide-react";
 import { BRAND_GRADIENT, C, MODALITIES } from "./lib/theme";
 import { applyTheme, getInitialTheme } from "./lib/themeMode";
 import { useAuth } from "./auth/AuthContext";
 import { LogoMark } from "./components/ui";
+import { NotificationsBell } from "./components/NotificationsBell";
 import { ModuleComingSoon } from "./components/ModuleComingSoon";
 import { Home } from "./home/Home";
 import { RunningModule } from "./modules/running/RunningModule";
@@ -135,14 +136,7 @@ export default function OmnifitApp() {
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
           </button>
 
-          <button
-            aria-label="Notificações"
-            title="Notificações"
-            className="flex items-center justify-center rounded-full p-2"
-            style={{ color: C.gray, border: `1px solid ${C.border}` }}
-          >
-            <Bell size={16} />
-          </button>
+          <NotificationsBell />
 
           <div className="relative" ref={profileMenuRef}>
             <button

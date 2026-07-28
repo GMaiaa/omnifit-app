@@ -4,8 +4,9 @@ import { C } from "../lib/theme";
 import { Card, CardHeader } from "../components/ui";
 import {
   buildStravaAuthUrl, extractStravaRedirectCode, connectStrava,
-  getStravaConnectionStatus, syncStravaActivities, disconnectStrava, mapStravaError,
+  getStravaConnectionStatus, disconnectStrava, mapStravaError,
 } from "../modules/strava/stravaService";
+import { StravaSyncModal } from "../modules/strava/StravaSyncModal";
 
 const SEX_OPTIONS = [
   { value: "feminino", label: "Feminino" },
@@ -52,8 +53,7 @@ export function ProfilePage({ profile, loading, saveError, onSave, onStravaSynce
 
   const [strava, setStrava] = useState({ status: "loading", athleteId: null }); // loading | connected | disconnected
   const [stravaError, setStravaError] = useState("");
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState("");
+  const [showSyncModal, setShowSyncModal] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -105,26 +105,6 @@ export function ProfilePage({ profile, loading, saveError, onSave, onStravaSynce
       maxHr: form.maxHr ? parseInt(form.maxHr, 10) : null,
     });
     setSaved(true);
-  }
-
-  async function handleStravaSync() {
-    setSyncing(true);
-    setStravaError("");
-    setSyncMessage("");
-    try {
-      const result = await syncStravaActivities();
-      const total = (result.cyclingImported ?? 0) + (result.runningImported ?? 0);
-      setSyncMessage(
-        total > 0
-          ? `${result.cyclingImported} treino(s) de ciclismo e ${result.runningImported} de corrida importados/atualizados.`
-          : "Nenhum treino novo encontrado no Strava."
-      );
-      onStravaSynced?.();
-    } catch (err) {
-      setStravaError(mapStravaError(err));
-    } finally {
-      setSyncing(false);
-    }
   }
 
   async function handleStravaDisconnect() {
@@ -259,7 +239,16 @@ export function ProfilePage({ profile, loading, saveError, onSave, onStravaSynce
                 style={{ background: C.surface2, border: `1px solid ${C.borderSoft}` }}
               >
                 <div className="flex items-center gap-3">
-                  <BrandBadge name={c.name} color={c.color} />
+                  <div
+                    className="flex items-center justify-center rounded-full flex-shrink-0"
+                    style={{ width: 40, height: 40, background: "color-mix(in srgb, #FC5200 12%, transparent)" }}
+                  >
+                    <img
+                      src="/brand/strava-powered-by-stack-orange.svg"
+                      alt="Strava"
+                      style={{ height: 26, width: "auto" }}
+                    />
+                  </div>
                   <div>
                     <div style={{ color: C.white, fontWeight: 600, fontSize: 14 }}>{c.name}</div>
                     <div style={{ color: C.gray, fontSize: 12 }}>
@@ -273,13 +262,11 @@ export function ProfilePage({ profile, loading, saveError, onSave, onStravaSynce
                   ) : isConnected ? (
                     <>
                       <button
-                        onClick={handleStravaSync}
-                        disabled={syncing}
-                        className="rounded-full px-4 py-2 text-xs font-semibold disabled:opacity-60 flex items-center gap-1.5"
+                        onClick={() => setShowSyncModal(true)}
+                        className="rounded-full px-4 py-2 text-xs font-semibold flex items-center gap-1.5"
                         style={{ background: `${c.color}26`, color: c.color }}
                       >
-                        {syncing && <Loader2 size={12} className="animate-spin" />}
-                        {syncing ? "Importando histórico…" : "Sincronizar"}
+                        Sincronizar
                       </button>
                       <button
                         onClick={handleStravaDisconnect}
@@ -307,9 +294,15 @@ export function ProfilePage({ profile, loading, saveError, onSave, onStravaSynce
             );
           })}
         </div>
-        {syncMessage && <div className="mt-3 text-xs" style={{ color: C.positive }}>{syncMessage}</div>}
         {stravaError && <div className="mt-3 text-xs" style={{ color: C.danger }}>{stravaError}</div>}
       </Card>
+
+      {showSyncModal && (
+        <StravaSyncModal
+          onClose={() => setShowSyncModal(false)}
+          onSynced={() => onStravaSynced?.()}
+        />
+      )}
     </div>
   );
 }
