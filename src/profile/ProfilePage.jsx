@@ -292,12 +292,14 @@ export function ProfilePage({ profile, loading, saveError, onSave, onStravaSynce
                   ) : stravaNotConfigured ? (
                     <span className="text-xs" style={{ color: C.gray }}>Integração ainda não configurada</span>
                   ) : (
-                    <a
-                      href={stravaAuthUrl}
-                      className="rounded-full px-4 py-2 text-xs font-semibold"
-                      style={{ background: c.color, color: "#fff" }}
-                    >
-                      Conectar
+                    <a href={stravaAuthUrl} aria-label="Conectar com o Strava">
+                      <img
+                        src="/brand/strava-connect-orange.svg"
+                        srcSet="/brand/strava-connect-orange.svg 1x, /brand/strava-connect-orange@2x.svg 2x"
+                        alt="Connect with Strava"
+                        height={40}
+                        style={{ display: "block", height: 40, width: "auto" }}
+                      />
                     </a>
                   )}
                 </div>
