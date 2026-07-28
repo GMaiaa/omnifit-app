@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BarChart3, ListChecks, PlusCircle, Zap } from "lucide-react";
+import { BarChart3, ListChecks, PlusCircle, Zap, Trophy } from "lucide-react";
 import { C, modalityInfo } from "../../lib/theme";
 import { uid } from "../../lib/format";
 import { DEFAULT_ROUNDS } from "./constants";
@@ -9,11 +9,13 @@ import { TemplateForm } from "./components/TemplateForm";
 import { TemplateDetail } from "./components/TemplateDetail";
 import { HyroxRunner } from "./components/HyroxRunner";
 import { AnalyticsTab } from "./components/analytics/AnalyticsTab";
+import { RecordsTab } from "./components/RecordsTab";
 
 const hyrox = modalityInfo("hyrox");
 
 const SUB_NAV = [
   { id: "analytics", label: "Analytics", icon: BarChart3 },
+  { id: "recordes", label: "Recordes", icon: Trophy },
   { id: "treinos", label: "Treinos", icon: ListChecks },
 ];
 
@@ -124,6 +126,8 @@ export function HyroxModule({ templates, sessions }) {
         <div className="flex justify-center py-20" style={{ color: C.gray }}>Carregando…</div>
       ) : tab === "analytics" ? (
         <AnalyticsTab sessions={sessions.sessions} />
+      ) : tab === "recordes" ? (
+        <RecordsTab sessions={sessions.sessions} />
       ) : templates.templates.length === 0 ? (
         <EmptyState
           icon={ListChecks}

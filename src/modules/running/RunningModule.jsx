@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { AlertTriangle, LayoutDashboard, ListChecks, BarChart3, PlusCircle } from "lucide-react";
+import { AlertTriangle, LayoutDashboard, ListChecks, BarChart3, PlusCircle, Trophy } from "lucide-react";
 import { C, modalityInfo } from "../../lib/theme";
 import { Card, EmptyState } from "../../components/ui";
 import { WorkoutForm } from "./components/WorkoutForm";
 import { WorkoutRow } from "./components/WorkoutRow";
 import { Dashboard } from "./components/Dashboard";
 import { AnalyticsTab } from "./components/analytics/AnalyticsTab";
+import { RecordsTab } from "./components/RecordsTab";
 import { deleteRunningWorkout, mapRunningWorkoutError } from "./runningService";
 
 const corrida = modalityInfo("corrida");
@@ -13,6 +14,7 @@ const corrida = modalityInfo("corrida");
 const SUB_NAV = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
+  { id: "recordes", label: "Recordes", icon: Trophy },
   { id: "treinos", label: "Treinos", icon: ListChecks },
 ];
 
@@ -94,6 +96,8 @@ export function RunningModule({ workouts, loading, error, addWorkout, updateWork
         <Dashboard workouts={workouts} />
       ) : tab === "analytics" ? (
         <AnalyticsTab workouts={workouts} />
+      ) : tab === "recordes" ? (
+        <RecordsTab workouts={workouts} />
       ) : workouts.length === 0 ? (
         <EmptyState
           icon={ListChecks}
