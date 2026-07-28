@@ -275,7 +275,7 @@ export default function OmnifitApp() {
             onSave={userProfile.updateProfile}
           />
         ) : tab === "upload" ? (
-          <UploadPage />
+          <UploadPage onCyclingWorkoutCreated={cycling.addWorkout} />
         ) : (
           <ModuleComingSoon modality={activeModality} />
         )}
