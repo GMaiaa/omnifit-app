@@ -60,14 +60,19 @@ export async function getStravaConnectionStatus() {
   return row ? { connected: true, athleteId: row.strava_athlete_id, connectedAt: row.connected_at } : { connected: false };
 }
 
-/* Dispara a sincronização COMPLETA do histórico (ciclismo + corrida) via
-   Edge Function strava-sync — não só as atividades recentes. Devolve
-   quantas foram importadas de cada modalidade nesta chamada. */
-export async function syncStravaActivities() {
-  const { data, error } = await supabase.functions.invoke("strava-sync");
+/* Dispara a sincronização via Edge Function strava-sync. Se afterUnix for
+   passado (timestamp Unix em segundos), só traz atividades a partir dali;
+   sem isso, sincroniza o histórico inteiro. Devolve contagens detalhadas,
+   incluindo quantas atividades vieram do Strava no total (totalFetched) e
+   quantas falharam ao salvar (cyclingFailed/runningFailed) — útil pra
+   diagnosticar quando "nada é importado" sem ver os logs da function. */
+export async function syncStravaActivities(afterUnix) {
+  const { data, error } = await supabase.functions.invoke("strava-sync", {
+    body: afterUnix ? { afterUnix } : {},
+  });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
-  return data; // { cyclingImported, runningImported, totalFetched }
+  return data; // { cyclingImported, runningImported, cyclingFailed, runningFailed, totalFetched, lastError }
 }
 
 export async function disconnectStrava() {
@@ -85,6 +90,9 @@ export function mapStravaError(error, fallback = "Não foi possível concluir a 
   if (message === "NOT_CONNECTED") return "Conecte sua conta do Strava primeiro.";
   if (message === "STRAVA_TOKEN_EXCHANGE_FAILED" || message === "STRAVA_REFRESH_FAILED") {
     return "Não foi possível autenticar com o Strava. Tente conectar novamente.";
+  }
+  if (message === "STRAVA_SCOPE_INSUFFICIENT") {
+    return "Sua autorização do Strava não inclui acesso às atividades. Desconecte e conecte de novo, aceitando todas as permissões pedidas.";
   }
   if (message === "STRAVA_FETCH_FAILED") return "Não foi possível buscar seus treinos no Strava agora.";
   if (message.toLowerCase().includes("failed to fetch") || message.toLowerCase().includes("network")) {

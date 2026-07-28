@@ -61,16 +61,24 @@ async function getValidAccessToken(admin: ReturnType<typeof supabaseAdmin>, user
   return refreshed.access_token;
 }
 
-async function fetchAllActivities(accessToken: string) {
+/* Busca atividades do atleta, opcionalmente só a partir de `afterUnix`
+   (segundos desde epoch). Sem esse parâmetro, busca o histórico inteiro
+   até o teto de segurança. Paginação para quando a API devolve uma
+   página incompleta. */
+async function fetchActivities(accessToken: string, afterUnix?: number) {
   const all = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
+    const params = new URLSearchParams({ per_page: String(PER_PAGE), page: String(page) });
+    if (afterUnix) params.set("after", String(afterUnix));
+
     const res = await fetch(
-      `https://www.strava.com/api/v3/athlete/activities?per_page=${PER_PAGE}&page=${page}`,
+      `https://www.strava.com/api/v3/athlete/activities?${params.toString()}`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
     if (!res.ok) {
-      console.error("[strava-sync] busca de atividades falhou na página", page, res.status, await res.text());
-      throw new Error("STRAVA_FETCH_FAILED");
+      const bodyText = await res.text();
+      console.error("[strava-sync] busca de atividades falhou na página", page, res.status, bodyText);
+      throw new Error(res.status === 401 ? "STRAVA_SCOPE_INSUFFICIENT" : "STRAVA_FETCH_FAILED");
     }
     const batch = await res.json();
     all.push(...batch);
@@ -87,12 +95,25 @@ Deno.serve(async (req) => {
     const admin = supabaseAdmin();
     const accessToken = await getValidAccessToken(admin, user.id);
 
-    const activities = await fetchAllActivities(accessToken);
+    // Corpo opcional: { afterUnix: 1690000000 } — quando ausente, sincroniza
+    // o histórico inteiro (comportamento antigo).
+    let afterUnix: number | undefined;
+    try {
+      const body = await req.json();
+      if (body?.afterUnix) afterUnix = Number(body.afterUnix);
+    } catch {
+      // corpo vazio é normal (sync sem filtro de data) — ignora
+    }
+
+    const activities = await fetchActivities(accessToken, afterUnix);
 
     const cyclingActivities = activities.filter((a: { type: string }) => CYCLING_TYPES.has(a.type));
     const runningActivities = activities.filter((a: { type: string }) => RUNNING_TYPES.has(a.type));
 
     let cyclingImported = 0;
+    let cyclingFailed = 0;
+    let lastError: string | null = null;
+
     for (const a of cyclingActivities) {
       const { error } = await admin.from("cycling_workouts").upsert(
         {
@@ -114,11 +135,18 @@ Deno.serve(async (req) => {
         },
         { onConflict: "user_id,external_id" },
       );
-      if (error) { console.error("[strava-sync] upsert ciclismo falhou:", a.id, error); continue; }
+      if (error) {
+        console.error("[strava-sync] upsert ciclismo falhou:", a.id, error);
+        cyclingFailed++;
+        lastError = error.message;
+        continue;
+      }
       cyclingImported++;
     }
 
     let runningImported = 0;
+    let runningFailed = 0;
+
     for (const a of runningActivities) {
       const distanceKm = Math.round((a.distance / 1000) * 100) / 100;
       const { error } = await admin.from("running_workouts").upsert(
@@ -137,12 +165,24 @@ Deno.serve(async (req) => {
         },
         { onConflict: "user_id,external_id" },
       );
-      if (error) { console.error("[strava-sync] upsert corrida falhou:", a.id, error); continue; }
+      if (error) {
+        console.error("[strava-sync] upsert corrida falhou:", a.id, error);
+        runningFailed++;
+        lastError = error.message;
+        continue;
+      }
       runningImported++;
     }
 
     return new Response(
-      JSON.stringify({ cyclingImported, runningImported, totalFetched: activities.length }),
+      JSON.stringify({
+        cyclingImported,
+        runningImported,
+        cyclingFailed,
+        runningFailed,
+        totalFetched: activities.length,
+        lastError,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
