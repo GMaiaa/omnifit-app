@@ -27,7 +27,13 @@ import { UploadPage } from "./upload/UploadPage";
 const MODALITY_ICONS = { Footprints, Dumbbell, Bike, Waves, Flame };
 
 export default function OmnifitApp() {
-  const [tab, setTab] = useState("home");
+  const [tab, setTab] = useState(() => {
+    // Se o usuário acabou de voltar do fluxo de autorização do Strava
+    // (redirect_uri = raiz do app), abre direto em Perfil, que é quem
+    // processa o ?code= da URL — senão o retorno nunca seria lido.
+    const params = new URLSearchParams(window.location.search);
+    return params.has("code") || params.has("error") ? "perfil" : "home";
+  });
   const [theme, setTheme] = useState(getInitialTheme);
   const [activityOpen, setActivityOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -277,6 +283,7 @@ export default function OmnifitApp() {
             loading={userProfile.loading}
             saveError={userProfile.saveError}
             onSave={userProfile.updateProfile}
+            onStravaSynced={cycling.refetch}
           />
         ) : tab === "upload" ? (
           <UploadPage onCyclingWorkoutCreated={cycling.addWorkout} />
