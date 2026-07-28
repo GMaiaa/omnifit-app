@@ -104,7 +104,11 @@ export default function OmnifitApp() {
         className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-8 py-3.5"
         style={{ background: `color-mix(in srgb, ${C.bg} 95%, transparent)`, borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}
       >
-        <div className="flex items-center gap-0.5">
+        <button
+          onClick={() => setTab("home")}
+          className="flex items-center gap-0.5 text-left"
+          aria-label="Ir para a tela inicial"
+        >
           <LogoMark size={72} />
           <div>
             <div style={{ fontWeight: 800, fontSize: 24, letterSpacing: -0.3 }}>OMNIFIT</div>
@@ -112,7 +116,7 @@ export default function OmnifitApp() {
               Visão completa da sua performance
             </div>
           </div>
-        </div>
+        </button>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={toggleTheme}
