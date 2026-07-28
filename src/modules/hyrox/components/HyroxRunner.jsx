@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtDuration, todayStr, uid } from "../../../lib/format";
+import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 import { DEFAULT_ROUNDS, FOCUS, categoryInfo } from "../constants";
 import { hyroxExerciseKeyOf } from "../analytics";
 import { Select } from "../../../components/ui";
@@ -148,6 +149,7 @@ function RoundFields({ metricType, round, onChange }) {
    Treino Livre (template.id === null): mesmo runner, mesma flexibilidade.
 --------------------------------------------------------- */
 export function HyroxRunner({ template, sessions, onComplete, onClose }) {
+  useLockBodyScroll();
   const hasTemplate = !!template.id;
 
   const [blocks, setBlocks] = useState(() =>

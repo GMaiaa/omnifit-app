@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, Plus, Trash2, X } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { uid } from "../../../lib/format";
+import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 import { DEFAULT_ROUNDS, FOCUS, categoryInfo } from "../constants";
 import { ExercisePicker } from "./ExercisePicker";
 
@@ -24,6 +25,7 @@ function newBlockRow(entry) {
    strength/TemplateForm.jsx, com blocos em vez de exercícios com séries.
 --------------------------------------------------------- */
 export function TemplateForm({ initial, onSave, onClose }) {
+  useLockBodyScroll();
   const [name, setName] = useState(initial?.name ?? "");
   const [focus, setFocus] = useState(initial?.focus ?? FOCUS[0].id);
   const [blocks, setBlocks] = useState(initial?.blocks ?? []);
@@ -72,7 +74,7 @@ export function TemplateForm({ initial, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ background: "rgba(3,7,18,0.7)" }}>
       <div
-        className="w-full sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-6"
+        className="w-full sm:max-w-lg max-h-[90dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-6"
         style={{ background: C.bgSoft, border: `1px solid ${C.border}` }}
       >
         <div className="flex items-center justify-between mb-5">

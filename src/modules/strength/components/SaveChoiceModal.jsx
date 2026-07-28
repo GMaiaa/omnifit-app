@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Copy, RefreshCw, X, Zap } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
+import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 
 const musculacao = modalityInfo("musculacao");
 
@@ -13,6 +14,7 @@ const OPTIONS = [
 /* Shown when finishing a session whose exercise list diverged from the
    template it came from — mirrors the 3-way choice from the spec exactly. */
 export function SaveChoiceModal({ originalName, onChoose, onCancel }) {
+  useLockBodyScroll();
   const [newName, setNewName] = useState(`${originalName} (nova versão)`);
   const [pendingNew, setPendingNew] = useState(false);
 

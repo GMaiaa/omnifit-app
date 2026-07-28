@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { ArrowLeft, Pencil, Play, Trash2 } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtDateShort, fmtDuration, fmtPace } from "../../../lib/format";
+import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 import { categoryInfo, focusInfo } from "../constants";
 import { exerciseHistory } from "../analytics";
 import { Card, CardHeader, Pill, Select } from "../../../components/ui";
@@ -18,6 +19,7 @@ function formatMetricValue(metricType, value) {
 }
 
 export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, onStart }) {
+  useLockBodyScroll();
   const templateSessions = useMemo(
     () => sessions.filter((s) => s.templateId === template.id),
     [sessions, template.id]

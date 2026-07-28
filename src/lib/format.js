@@ -56,3 +56,18 @@ export function fmtElevation(m) {
   if (m === null || m === undefined || !isFinite(m)) return "—";
   return `${Math.round(m).toLocaleString("pt-BR")} m`;
 }
+
+/* Faixa Unicode dos diacríticos combinantes (U+0300–U+036F) — construída via
+   charCode em vez de um literal \uXXXX na regex para não depender de como
+   escapes de barra invertida sobrevivem a ferramentas de edição de texto. */
+const COMBINING_DIACRITICS_RE = new RegExp(`[${String.fromCharCode(768)}-${String.fromCharCode(879)}]`, "g");
+
+/* Remove acentos/diacríticos e normaliza caixa — usado em buscas por texto
+   (ex: exercícios) para que "triceps" encontre "Tríceps". */
+export function normalizeSearch(str) {
+  return String(str ?? "")
+    .normalize("NFD")
+    .replace(COMBINING_DIACRITICS_RE, "")
+    .toLowerCase()
+    .trim();
+}

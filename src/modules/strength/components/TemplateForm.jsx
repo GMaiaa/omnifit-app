@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CheckCircle2, ChevronDown, ChevronUp, Plus, Trash2, X } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { uid } from "../../../lib/format";
+import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 import { DEFAULT_SETS, muscleGroupInfo } from "../constants";
 import { createStrengthTemplate, mapStrengthError } from "../strengthService";
 import { ExercisePicker } from "./ExercisePicker";
@@ -29,6 +30,7 @@ function newExerciseRow(entry) {
    próxima parte da integração — ver strengthService.js.
 --------------------------------------------------------- */
 export function TemplateForm({ initial, onSave, onClose }) {
+  useLockBodyScroll();
   const isEdit = !!initial;
   const [name, setName] = useState(initial?.name ?? "");
   const [exercises, setExercises] = useState(initial?.exercises ?? []);
@@ -102,7 +104,7 @@ export function TemplateForm({ initial, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ background: "rgba(3,7,18,0.7)" }}>
       <div
-        className="w-full sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-6"
+        className="w-full sm:max-w-lg max-h-[90dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-6"
         style={{ background: C.bgSoft, border: `1px solid ${C.border}` }}
       >
         <div className="flex items-center justify-between mb-5">
