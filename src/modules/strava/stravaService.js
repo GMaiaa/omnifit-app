@@ -60,13 +60,14 @@ export async function getStravaConnectionStatus() {
   return row ? { connected: true, athleteId: row.strava_athlete_id, connectedAt: row.connected_at } : { connected: false };
 }
 
-/* Dispara a sincronização das atividades de ciclismo via Edge Function
-   strava-sync. Devolve quantas foram importadas nesta chamada. */
+/* Dispara a sincronização COMPLETA do histórico (ciclismo + corrida) via
+   Edge Function strava-sync — não só as atividades recentes. Devolve
+   quantas foram importadas de cada modalidade nesta chamada. */
 export async function syncStravaActivities() {
   const { data, error } = await supabase.functions.invoke("strava-sync");
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
-  return data; // { imported, total }
+  return data; // { cyclingImported, runningImported, totalFetched }
 }
 
 export async function disconnectStrava() {
