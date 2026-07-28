@@ -113,10 +113,11 @@ export function ProfilePage({ profile, loading, saveError, onSave, onStravaSynce
     setSyncMessage("");
     try {
       const result = await syncStravaActivities();
+      const total = (result.cyclingImported ?? 0) + (result.runningImported ?? 0);
       setSyncMessage(
-        result.imported > 0
-          ? `${result.imported} treino(s) importado(s) do Strava.`
-          : "Nenhum treino novo de ciclismo encontrado no Strava."
+        total > 0
+          ? `${result.cyclingImported} treino(s) de ciclismo e ${result.runningImported} de corrida importados/atualizados.`
+          : "Nenhum treino novo encontrado no Strava."
       );
       onStravaSynced?.();
     } catch (err) {
@@ -262,7 +263,7 @@ export function ProfilePage({ profile, loading, saveError, onSave, onStravaSynce
                   <div>
                     <div style={{ color: C.white, fontWeight: 600, fontSize: 14 }}>{c.name}</div>
                     <div style={{ color: C.gray, fontSize: 12 }}>
-                      {isConnected ? "Conectado — sincronize a qualquer momento." : c.description}
+                      {isConnected ? "Conectado — Sincronizar importa todo o histórico de ciclismo e corrida." : c.description}
                     </div>
                   </div>
                 </div>
@@ -278,7 +279,7 @@ export function ProfilePage({ profile, loading, saveError, onSave, onStravaSynce
                         style={{ background: `${c.color}26`, color: c.color }}
                       >
                         {syncing && <Loader2 size={12} className="animate-spin" />}
-                        {syncing ? "Sincronizando…" : "Sincronizar"}
+                        {syncing ? "Importando histórico…" : "Sincronizar"}
                       </button>
                       <button
                         onClick={handleStravaDisconnect}

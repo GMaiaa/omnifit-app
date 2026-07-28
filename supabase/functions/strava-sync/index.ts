@@ -1,12 +1,25 @@
 import { corsHeaders } from "../_shared/cors.ts";
 import { supabaseAdmin, getAuthenticatedUser } from "../_shared/supabaseAdmin.ts";
 
-// Tipos de atividade do Strava que mapeiam pra ciclismo no Omnifit.
 const CYCLING_TYPES = new Set(["Ride", "VirtualRide", "GravelRide", "MountainBikeRide", "EBikeRide"]);
+const RUNNING_TYPES = new Set(["Run", "VirtualRun", "TrailRun"]);
 
-/* Garante um access_token válido: se o salvo já expirou (ou expira nos
-   próximos 2 minutos), usa o refresh_token pra pedir um novo ao Strava e
-   atualiza a conexão salva antes de devolver. */
+function mapRunningType(workoutType: number | null | undefined) {
+  if (workoutType === 1) return "prova";
+  if (workoutType === 2) return "longo";
+  if (workoutType === 3) return "intervalado";
+  return "rodagem";
+}
+
+function paceSecKm(distanceKm: number, durationSec: number) {
+  if (!distanceKm || distanceKm <= 0 || !durationSec || durationSec <= 0) return null;
+  const pace = durationSec / distanceKm;
+  return Number.isFinite(pace) ? Math.round(pace) : null;
+}
+
+const PER_PAGE = 100;
+const MAX_PAGES = 20;
+
 async function getValidAccessToken(admin: ReturnType<typeof supabaseAdmin>, userId: string) {
   const { data: conn, error } = await admin
     .from("strava_connections")
@@ -48,6 +61,24 @@ async function getValidAccessToken(admin: ReturnType<typeof supabaseAdmin>, user
   return refreshed.access_token;
 }
 
+async function fetchAllActivities(accessToken: string) {
+  const all = [];
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const res = await fetch(
+      `https://www.strava.com/api/v3/athlete/activities?per_page=${PER_PAGE}&page=${page}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!res.ok) {
+      console.error("[strava-sync] busca de atividades falhou na página", page, res.status, await res.text());
+      throw new Error("STRAVA_FETCH_FAILED");
+    }
+    const batch = await res.json();
+    all.push(...batch);
+    if (batch.length < PER_PAGE) break;
+  }
+  return all;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -56,23 +87,12 @@ Deno.serve(async (req) => {
     const admin = supabaseAdmin();
     const accessToken = await getValidAccessToken(admin, user.id);
 
-    // Busca as últimas 50 atividades do Strava (suficiente pra uma
-    // sincronização manual disparada pelo usuário; sincronização
-    // incremental automática fica pra uma próxima iteração).
-    const activitiesRes = await fetch(
-      "https://www.strava.com/api/v3/athlete/activities?per_page=50",
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    );
+    const activities = await fetchAllActivities(accessToken);
 
-    if (!activitiesRes.ok) {
-      console.error("[strava-sync] busca de atividades falhou:", activitiesRes.status, await activitiesRes.text());
-      throw new Error("STRAVA_FETCH_FAILED");
-    }
-
-    const activities = await activitiesRes.json();
     const cyclingActivities = activities.filter((a: { type: string }) => CYCLING_TYPES.has(a.type));
+    const runningActivities = activities.filter((a: { type: string }) => RUNNING_TYPES.has(a.type));
 
-    let imported = 0;
+    let cyclingImported = 0;
     for (const a of cyclingActivities) {
       const { error } = await admin.from("cycling_workouts").upsert(
         {
@@ -94,16 +114,35 @@ Deno.serve(async (req) => {
         },
         { onConflict: "user_id,external_id" },
       );
+      if (error) { console.error("[strava-sync] upsert ciclismo falhou:", a.id, error); continue; }
+      cyclingImported++;
+    }
 
-      if (error) {
-        console.error("[strava-sync] upsert de atividade falhou:", a.id, error);
-        continue;
-      }
-      imported++;
+    let runningImported = 0;
+    for (const a of runningActivities) {
+      const distanceKm = Math.round((a.distance / 1000) * 100) / 100;
+      const { error } = await admin.from("running_workouts").upsert(
+        {
+          user_id: user.id,
+          external_id: `strava:${a.id}`,
+          source: "strava",
+          date: a.start_date_local?.slice(0, 10),
+          type: mapRunningType(a.workout_type),
+          distance_km: distanceKm,
+          duration_sec: a.moving_time,
+          pace_sec_km: paceSecKm(distanceKm, a.moving_time),
+          avg_hr: a.average_heartrate != null ? Math.round(a.average_heartrate) : null,
+          calories: a.calories != null ? Math.round(a.calories) : null,
+          notes: a.name ?? null,
+        },
+        { onConflict: "user_id,external_id" },
+      );
+      if (error) { console.error("[strava-sync] upsert corrida falhou:", a.id, error); continue; }
+      runningImported++;
     }
 
     return new Response(
-      JSON.stringify({ imported, total: cyclingActivities.length }),
+      JSON.stringify({ cyclingImported, runningImported, totalFetched: activities.length }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {

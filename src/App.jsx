@@ -297,7 +297,7 @@ export default function OmnifitApp() {
             loading={userProfile.loading}
             saveError={userProfile.saveError}
             onSave={userProfile.updateProfile}
-            onStravaSynced={cycling.refetch}
+            onStravaSynced={() => { cycling.refetch(); running.refetch(); }}
           />
         ) : tab === "upload" ? (
           <UploadPage onCyclingWorkoutCreated={cycling.addWorkout} />
