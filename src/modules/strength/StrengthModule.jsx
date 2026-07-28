@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, BarChart3, ListChecks, PlusCircle } from "lucide-react";
+import { AlertTriangle, BarChart3, ListChecks, PlusCircle, Trophy } from "lucide-react";
 import { C, modalityInfo } from "../../lib/theme";
 import { uid } from "../../lib/format";
 import { DEFAULT_SETS } from "./constants";
@@ -10,11 +10,13 @@ import { TemplateForm } from "./components/TemplateForm";
 import { TemplateDetail } from "./components/TemplateDetail";
 import { SessionRunner } from "./components/SessionRunner";
 import { AnalyticsTab } from "./components/analytics/AnalyticsTab";
+import { RecordsTab } from "./components/RecordsTab";
 
 const musculacao = modalityInfo("musculacao");
 
 const SUB_NAV = [
   { id: "analytics", label: "Analytics", icon: BarChart3 },
+  { id: "recordes", label: "Recordes", icon: Trophy },
   { id: "treinos", label: "Treinos", icon: ListChecks },
 ];
 
@@ -148,6 +150,8 @@ export function StrengthModule({ templates, sessions }) {
         <div className="flex justify-center py-20" style={{ color: C.gray }}>Carregando…</div>
       ) : tab === "analytics" ? (
         <AnalyticsTab sessions={sessions.sessions} />
+      ) : tab === "recordes" ? (
+        <RecordsTab sessions={sessions.sessions} />
       ) : hasBlockingTemplatesError ? (
         <Card className="flex flex-col items-center justify-center text-center py-16 gap-3">
           <div className="rounded-full p-4" style={{ background: `color-mix(in srgb, ${C.danger} 8%, transparent)` }}>

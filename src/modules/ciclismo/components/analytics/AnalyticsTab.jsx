@@ -10,7 +10,6 @@ import { SpeedHrCard } from "./SpeedHrCard";
 import { VolumeVariationCard } from "./VolumeVariationCard";
 import { ElevationCard } from "./ElevationCard";
 import { ConsistencyCard } from "./ConsistencyCard";
-import { RecordsCard } from "./RecordsCard";
 import { CycleComparisonCard } from "./CycleComparisonCard";
 
 const WINDOW_OPTIONS = [
@@ -72,8 +71,6 @@ export function AnalyticsTab({ workouts }) {
         </div>
         <CycleComparisonCard workouts={workouts} />
       </div>
-
-      <RecordsCard workouts={workouts} typeId={activeType} />
     </div>
   );
 }

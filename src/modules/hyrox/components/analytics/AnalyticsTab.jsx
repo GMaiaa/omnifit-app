@@ -16,7 +16,6 @@ import { ExerciseEvolutionCard } from "./ExerciseEvolutionCard";
 import { ConsistencyCard } from "./ConsistencyCard";
 import { VolumeCard } from "./VolumeCard";
 import { FocusDistributionCard } from "./FocusDistributionCard";
-import { RecordsCard } from "./RecordsCard";
 import { CycleComparisonCard } from "./CycleComparisonCard";
 import { RaceAnalyticsCard } from "./RaceAnalyticsCard";
 
@@ -98,12 +97,7 @@ export function AnalyticsTab({ sessions }) {
         <FocusDistributionCard sessions={sessions} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <RecordsCard sessions={sessions} />
-        </div>
-        <CycleComparisonCard sessions={sessions} />
-      </div>
+      <CycleComparisonCard sessions={sessions} />
 
       <RaceAnalyticsCard sessions={sessions} />
     </div>
