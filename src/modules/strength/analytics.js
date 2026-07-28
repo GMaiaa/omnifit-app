@@ -318,6 +318,49 @@ export function personalRecords(sessions) {
 }
 
 /* ---------------------------------------------------------
+   LIVE PR DETECTION (durante uma sessão em andamento)
+--------------------------------------------------------- */
+/* Todos os sets "contados" (done, peso e reps válidos) de cada exercício já
+   registrados em sessões anteriores, agrupados por chave — usado para
+   destacar ao vivo quando uma série da sessão atual bate recorde, sem
+   precisar rodar uma consulta separada por exercício a cada tecla digitada. */
+export function setHistoryByExercise(sessions) {
+  const map = new Map();
+  for (const s of sessions) {
+    for (const ex of s.exercises) {
+      const counted = ex.sets.filter(isCountedSet);
+      if (counted.length === 0) continue;
+      const key = exerciseKeyOf(ex);
+      if (!map.has(key)) map.set(key, []);
+      const bucket = map.get(key);
+      for (const set of counted) bucket.push({ weight: set.weight, reps: set.reps });
+    }
+  }
+  return map;
+}
+
+/* Recorde de peso (mais pesado já levantado, em qualquer repetição) e de
+   repetições (mais reps já feitas nesse peso ou mais) são independentes —
+   uma série pode bater os dois, um só, ou nenhum. Precisa de pelo menos um
+   registro anterior: a primeira vez que um exercício é feito não conta como
+   "recorde" (não há nada ainda para bater). */
+export function detectSetPR(history, weight, reps) {
+  if (!(weight > 0) || !(reps > 0) || !history || history.length === 0) {
+    return { weightPR: false, repsPR: false };
+  }
+  let bestWeight = 0;
+  let bestRepsAtWeight = 0;
+  for (const h of history) {
+    if (h.weight > bestWeight) bestWeight = h.weight;
+    if (h.weight >= weight && h.reps > bestRepsAtWeight) bestRepsAtWeight = h.reps;
+  }
+  return {
+    weightPR: weight > bestWeight,
+    repsPR: reps > bestRepsAtWeight,
+  };
+}
+
+/* ---------------------------------------------------------
    TRAINING CYCLE COMPARISON (fixed N-week blocks)
 --------------------------------------------------------- */
 function summarizeCycle(sessions, start, end) {

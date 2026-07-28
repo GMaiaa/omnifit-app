@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
+import { normalizeSearch } from "../../../lib/format";
+import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 import { EQUIPMENT, EXERCISE_CATALOG, MUSCLE_GROUPS } from "../constants";
 
 const musculacao = modalityInfo("musculacao");
@@ -10,6 +12,7 @@ const musculacao = modalityInfo("musculacao");
    shared by TemplateForm (building a ficha) and SessionRunner (add/substitute
    mid-workout). */
 export function ExercisePicker({ onSelect, onClose }) {
+  useLockBodyScroll();
   const [query, setQuery] = useState("");
   const [customMode, setCustomMode] = useState(false);
   const [customName, setCustomName] = useState("");
@@ -17,9 +20,9 @@ export function ExercisePicker({ onSelect, onClose }) {
   const [customEquipment, setCustomEquipment] = useState(EQUIPMENT[0]);
 
   const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = normalizeSearch(query);
     const list = q
-      ? EXERCISE_CATALOG.filter((e) => e.name.toLowerCase().includes(q))
+      ? EXERCISE_CATALOG.filter((e) => normalizeSearch(e.name).includes(q))
       : EXERCISE_CATALOG;
     const byGroup = new Map();
     for (const e of list) {
@@ -43,7 +46,7 @@ export function ExercisePicker({ onSelect, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center" style={{ background: "rgba(3,7,18,0.7)" }}>
       <div
-        className="w-full sm:max-w-lg max-h-[85vh] flex flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl"
+        className="w-full sm:max-w-lg max-h-[85dvh] flex flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl"
         style={{ background: C.bgSoft, border: `1px solid ${C.border}` }}
       >
         <div className="flex items-center justify-between px-6 pt-6 pb-3">

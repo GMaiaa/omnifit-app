@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { ArrowLeft, Pencil, Play, Trash2 } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtDateShort, fmtDuration, fmtVolume } from "../../../lib/format";
+import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 import { muscleGroupInfo } from "../constants";
 import { exerciseHistory, sessionSetsCount, sessionVolume } from "../analytics";
 import { Card, CardHeader, Pill, Select } from "../../../components/ui";
@@ -10,6 +11,7 @@ import { Card, CardHeader, Pill, Select } from "../../../components/ui";
 const musculacao = modalityInfo("musculacao");
 
 export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, onStart }) {
+  useLockBodyScroll();
   const templateSessions = useMemo(
     () => sessions.filter((s) => s.templateId === template.id),
     [sessions, template.id]

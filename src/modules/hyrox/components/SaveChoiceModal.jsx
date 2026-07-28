@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Copy, History, RefreshCw, X, Zap } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
+import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 
 const hyrox = modalityInfo("hyrox");
 
@@ -19,6 +20,7 @@ const FREE_OPTIONS = [
    - hasTemplate: sessão veio de uma ficha cuja estrutura mudou (3 opções).
    - !hasTemplate: Treino Livre sem origem — pergunta simples de reutilização. */
 export function SaveChoiceModal({ hasTemplate, originalName, onChoose, onCancel }) {
+  useLockBodyScroll();
   const [newName, setNewName] = useState(hasTemplate ? `${originalName} (nova versão)` : "");
   const [pendingNew, setPendingNew] = useState(false);
   const options = hasTemplate ? TEMPLATE_OPTIONS : FREE_OPTIONS;

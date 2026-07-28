@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2, ChevronDown, ChevronUp, Circle, MessageSquare,
-  MinusCircle, Plus, Repeat, Timer, Trash2, X,
+  MinusCircle, Plus, Repeat, Timer, Trash2, Trophy, X,
 } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtDuration, todayStr, uid } from "../../../lib/format";
+import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 import { DEFAULT_SETS, muscleGroupInfo } from "../constants";
-import { exerciseKeyOf } from "../analytics";
+import { detectSetPR, exerciseKeyOf, setHistoryByExercise } from "../analytics";
 import { ExercisePicker } from "./ExercisePicker";
 import { SaveChoiceModal } from "./SaveChoiceModal";
 
@@ -58,7 +59,9 @@ function mostRecentSessionFor(sessions, templateId) {
    EXECUTION MODE — full-screen, optimized for gym use.
 --------------------------------------------------------- */
 export function SessionRunner({ template, sessions, onComplete, onClose }) {
+  useLockBodyScroll();
   const lastSession = useMemo(() => mostRecentSessionFor(sessions, template.id), [sessions, template.id]);
+  const historyByExercise = useMemo(() => setHistoryByExercise(sessions), [sessions]);
 
   const [exercises, setExercises] = useState(() =>
     template.exercises
@@ -82,6 +85,19 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
     return () => clearInterval(id);
   }, []);
 
+  /* Timer de descanso: reinicia toda vez que uma série é marcada como
+     concluída (em qualquer exercício), independente de qual vai começar
+     em seguida. */
+  const [restSec, setRestSec] = useState(0);
+  const [resting, setResting] = useState(false);
+  const restStartMsRef = useRef(null);
+
+  useEffect(() => {
+    if (!resting) return;
+    const id = setInterval(() => setRestSec(Math.floor((Date.now() - restStartMsRef.current) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [resting]);
+
   const totalSets = exercises.reduce((a, ex) => a + ex.sets.length, 0);
   const doneSets = exercises.reduce((a, ex) => a + ex.sets.filter((s) => s.status === "done").length, 0);
 
@@ -102,9 +118,19 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
     setExercises((prev) => prev.map((ex) => (ex.id !== exId ? ex : { ...ex, sets: ex.sets.filter((s) => s.id !== setId) })));
   }
   function toggleDone(exId, setId) {
-    setExercises((prev) => prev.map((ex) => (ex.id !== exId ? ex : {
-      ...ex, sets: ex.sets.map((s) => (s.id === setId ? { ...s, status: s.status === "done" ? "pending" : "done" } : s)),
+    const ex = exercises.find((e) => e.id === exId);
+    const set = ex?.sets.find((s) => s.id === setId);
+    const willBeDone = !!set && set.status !== "done";
+
+    setExercises((prev) => prev.map((e) => (e.id !== exId ? e : {
+      ...e, sets: e.sets.map((s) => (s.id === setId ? { ...s, status: s.status === "done" ? "pending" : "done" } : s)),
     })));
+
+    if (willBeDone) {
+      restStartMsRef.current = Date.now();
+      setRestSec(0);
+      setResting(true);
+    }
   }
   function toggleSkip(exId, setId) {
     setExercises((prev) => prev.map((ex) => (ex.id !== exId ? ex : {
@@ -230,24 +256,40 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: C.bg }}>
-      <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-3.5" style={{ background: `color-mix(in srgb, ${C.bg} 95%, transparent)`, borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
-        <div className="flex items-center gap-3 min-w-0">
-          <button onClick={handleClose} disabled={saving} className="p-1.5 rounded-full flex-shrink-0 disabled:opacity-40" style={{ color: C.gray }}>
-            <X size={20} />
-          </button>
-          <div className="min-w-0">
-            <div className="text-sm font-semibold truncate" style={{ color: C.white, fontFamily: "'Poppins', sans-serif" }}>{template.name}</div>
-            <div className="flex items-center gap-1 text-xs" style={{ color: musculacao.color }}>
-              <Timer size={11} /> {fmtDuration(elapsedSec)}
+      <div className="sticky top-0 z-10" style={{ background: `color-mix(in srgb, ${C.bg} 95%, transparent)`, borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5">
+          <div className="flex items-center gap-3 min-w-0">
+            <button onClick={handleClose} disabled={saving} className="p-1.5 rounded-full flex-shrink-0 disabled:opacity-40" style={{ color: C.gray }}>
+              <X size={20} />
+            </button>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold truncate" style={{ color: C.white, fontFamily: "'Poppins', sans-serif" }}>{template.name}</div>
+              <div className="flex items-center gap-1 text-xs" style={{ color: musculacao.color }}>
+                <Timer size={11} /> {fmtDuration(elapsedSec)}
+              </div>
             </div>
           </div>
+          <div className="text-xs font-semibold flex-shrink-0" style={{ color: C.gray }}>{doneSets}/{totalSets} séries</div>
         </div>
-        <div className="text-xs font-semibold flex-shrink-0" style={{ color: C.gray }}>{doneSets}/{totalSets} séries</div>
+
+        {resting && (
+          <div
+            className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2"
+            style={{ borderTop: `1px solid ${C.borderSoft}`, background: `color-mix(in srgb, ${musculacao.color} 10%, transparent)` }}
+          >
+            <Timer size={13} style={{ color: musculacao.color }} />
+            <span className="text-sm font-semibold" style={{ color: C.white }}>Descanso: {fmtDuration(restSec)}</span>
+            <button onClick={() => setResting(false)} className="ml-1 text-xs font-semibold" style={{ color: C.gray }}>
+              ocultar
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 flex flex-col gap-3 max-w-2xl w-full mx-auto">
         {exercises.map((ex, i) => {
           const group = muscleGroupInfo(ex.muscleGroup);
+          const exerciseHistory = historyByExercise.get(exerciseKeyOf(ex)) || [];
           return (
             <div key={ex.id} className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
               <div className="flex items-start gap-2 mb-3">
@@ -285,8 +327,24 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
                 {ex.sets.map((s, si) => {
                   const skipped = s.status === "skipped";
                   const done = s.status === "done";
+                  const { weightPR, repsPR } = done ? detectSetPR(exerciseHistory, s.weight, s.reps) : { weightPR: false, repsPR: false };
+                  const isPR = weightPR || repsPR;
+                  const prLabel = weightPR && repsPR
+                    ? "Novo recorde de peso e repetições!"
+                    : weightPR
+                      ? "Novo recorde de peso!"
+                      : "Novo recorde de repetições!";
                   return (
-                    <div key={s.id} className="flex items-center gap-2" style={{ opacity: skipped ? 0.45 : 1 }}>
+                    <div
+                      key={s.id}
+                      className="flex items-center gap-2 rounded-lg"
+                      style={{
+                        opacity: skipped ? 0.45 : 1,
+                        background: isPR ? `color-mix(in srgb, ${C.amber} 12%, transparent)` : "transparent",
+                        border: `1px solid ${isPR ? `color-mix(in srgb, ${C.amber} 35%, transparent)` : "transparent"}`,
+                        padding: isPR ? "4px 6px" : "0",
+                      }}
+                    >
                       <span className="text-xs w-4 flex-shrink-0" style={{ color: C.gray }}>{si + 1}</span>
                       <input
                         type="number" inputMode="decimal" placeholder="kg" value={s.weight ?? ""}
@@ -303,6 +361,11 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
                         className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none"
                         style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
                       />
+                      {isPR && (
+                        <span title={prLabel} className="flex-shrink-0">
+                          <Trophy size={15} style={{ color: C.amber }} />
+                        </span>
+                      )}
                       <button onClick={() => toggleDone(ex.id, s.id)} className="p-1 flex-shrink-0">
                         {done ? <CheckCircle2 size={20} style={{ color: musculacao.color }} /> : <Circle size={20} style={{ color: C.gray }} />}
                       </button>

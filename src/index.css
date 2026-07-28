@@ -71,3 +71,13 @@ body {
 input[type="date"]::-webkit-calendar-picker-indicator {
   filter: var(--omni-date-icon-filter);
 }
+
+/* iOS Safari dá zoom automático na página ao focar um campo com font-size
+   menor que 16px — é a causa mais comum de "preciso dar e tirar zoom" em
+   formulários mobile. Os inputs do app usam text-sm (14px) por padrão; aqui
+   só o tamanho da fonte é elevado no mobile, sem mudar o layout/padding. */
+@media (max-width: 640px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}

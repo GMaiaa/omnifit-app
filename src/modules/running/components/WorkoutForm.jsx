@@ -2,6 +2,7 @@ import { useState } from "react";
 import { CheckCircle2, Gauge, X } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtPace, todayStr } from "../../../lib/format";
+import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 import { TYPES } from "../constants";
 import { computePaceSecKm, createRunningWorkout, mapRunningWorkoutError, updateRunningWorkout } from "../runningService";
 
@@ -23,6 +24,7 @@ function durationParts(durationSec) {
    `initial` é informado (mesmo formulário, só muda o serviço chamado).
 --------------------------------------------------------- */
 export function WorkoutForm({ initial, onSave, onClose }) {
+  useLockBodyScroll();
   const isEdit = !!initial;
   const initialDuration = durationParts(initial?.durationSec);
 
@@ -93,7 +95,7 @@ export function WorkoutForm({ initial, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ background: "rgba(3,7,18,0.7)" }}>
       <div
-        className="w-full sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-6"
+        className="w-full sm:max-w-lg max-h-[90dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-6"
         style={{ background: C.bgSoft, border: `1px solid ${C.border}` }}
       >
         <div className="flex items-center justify-between mb-5">

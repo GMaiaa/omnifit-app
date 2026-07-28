@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, Gauge, X } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtPace, todayStr, uid } from "../../../lib/format";
+import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 import { ENVIRONMENTS, POOL_TYPES, STROKES, TYPES } from "../constants";
 import { BlockEditor } from "./BlockEditor";
 import { DrillPicker } from "./DrillPicker";
@@ -13,6 +14,7 @@ const inputStyle = { background: C.surface2, border: `1px solid ${C.border}`, co
    NEW WORKOUT FORM
 --------------------------------------------------------- */
 export function WorkoutForm({ onSave, onClose }) {
+  useLockBodyScroll();
   const [date, setDate] = useState(todayStr());
   const [environment, setEnvironment] = useState("piscina");
   const [poolType, setPoolType] = useState("25");
@@ -70,7 +72,7 @@ export function WorkoutForm({ onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ background: "rgba(3,7,18,0.7)" }}>
       <div
-        className="w-full sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-6"
+        className="w-full sm:max-w-lg max-h-[90dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-6"
         style={{ background: C.bgSoft, border: `1px solid ${C.border}` }}
       >
         <div className="flex items-center justify-between mb-5">

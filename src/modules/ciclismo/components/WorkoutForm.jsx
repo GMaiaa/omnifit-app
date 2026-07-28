@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Gauge, X } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtSpeed, todayStr, uid } from "../../../lib/format";
+import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 import { TYPES } from "../constants";
 
 const ciclismo = modalityInfo("ciclismo");
@@ -10,6 +11,7 @@ const ciclismo = modalityInfo("ciclismo");
    NEW WORKOUT FORM
 --------------------------------------------------------- */
 export function WorkoutForm({ onSave, onClose }) {
+  useLockBodyScroll();
   const [date, setDate] = useState(todayStr());
   const [type, setType] = useState("endurance");
   const [distance, setDistance] = useState("");
@@ -45,7 +47,7 @@ export function WorkoutForm({ onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" style={{ background: "rgba(3,7,18,0.7)" }}>
       <div
-        className="w-full sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-6"
+        className="w-full sm:max-w-lg max-h-[90dvh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-6"
         style={{ background: C.bgSoft, border: `1px solid ${C.border}` }}
       >
         <div className="flex items-center justify-between mb-5">
