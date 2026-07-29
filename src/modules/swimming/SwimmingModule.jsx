@@ -1,16 +1,18 @@
 import { useState } from "react";
-import { ListChecks, BarChart3, PlusCircle } from "lucide-react";
+import { ListChecks, BarChart3, PlusCircle, Trophy } from "lucide-react";
 import { C, modalityInfo } from "../../lib/theme";
 import { EmptyState } from "../../components/ui";
 import { WorkoutForm } from "./components/WorkoutForm";
 import { WorkoutRow } from "./components/WorkoutRow";
 import { DrillLibraryReference } from "./components/DrillLibraryReference";
 import { AnalyticsTab } from "./components/analytics/AnalyticsTab";
+import { RecordsTab } from "./components/RecordsTab";
 
 const natacao = modalityInfo("natacao");
 
 const SUB_NAV = [
   { id: "analytics", label: "Analytics", icon: BarChart3 },
+  { id: "recordes", label: "Recordes", icon: Trophy },
   { id: "treinos", label: "Treinos", icon: ListChecks },
 ];
 
@@ -53,6 +55,8 @@ export function SwimmingModule({ workouts, loading, saveError, addWorkout, delet
         <div className="flex justify-center py-20" style={{ color: C.gray }}>Carregando…</div>
       ) : tab === "analytics" ? (
         <AnalyticsTab workouts={workouts} />
+      ) : tab === "recordes" ? (
+        <RecordsTab workouts={workouts} />
       ) : (
         <div className="flex flex-col gap-3">
           <DrillLibraryReference />

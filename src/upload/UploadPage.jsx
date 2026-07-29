@@ -1,7 +1,20 @@
 import { useState } from "react";
-import { Laptop, Smartphone, UploadCloud, PenLine } from "lucide-react";
+import { Laptop, Smartphone, UploadCloud, PenLine, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { C } from "../lib/theme";
 import { Card } from "../components/ui";
+import { parseFitFile, mapFitParseError } from "../lib/fitParser";
+import { createCyclingWorkout, mapCyclingWorkoutError } from "../modules/ciclismo/cyclingService";
+
+/* Hoje só ciclismo tem CRUD real via Supabase (ver useCyclingWorkouts) —
+   por isso o upload de .fit só cria treino de ciclismo por enquanto.
+   Um .fit de outro esporte é rejeitado com uma mensagem clara em vez de
+   ser salvo incorretamente. */
+async function processFitFile(file, onWorkoutCreated) {
+  const parsed = await parseFitFile(file); // pode lançar FIT_PARSE_FAILED / NOT_A_CYCLING_ACTIVITY
+  const saved = await createCyclingWorkout(parsed);
+  onWorkoutCreated?.(saved);
+  return saved;
+}
 
 const SIDE_NAV = [
   { id: "dispositivo", label: "Dispositivo", icon: Laptop },
@@ -22,12 +35,28 @@ function ComingSoonPanel({ icon: Icon, title, description }) {
   );
 }
 
-export function UploadPage() {
+export function UploadPage({ onCyclingWorkoutCreated }) {
   const [sideTab, setSideTab] = useState("arquivo");
-  const [fileNames, setFileNames] = useState([]);
+  // items: [{ name, status: 'pending' | 'done' | 'error', message? }]
+  const [items, setItems] = useState([]);
 
-  function handleFilesChosen(e) {
-    setFileNames(Array.from(e.target.files ?? []).map((f) => f.name));
+  async function handleFilesChosen(e) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = ""; // permite selecionar o mesmo arquivo de novo depois de um erro
+
+    setItems(files.map((f) => ({ name: f.name, status: "pending" })));
+
+    for (const file of files) {
+      try {
+        await processFitFile(file, onCyclingWorkoutCreated);
+        setItems((prev) => prev.map((it) => (it.name === file.name ? { ...it, status: "done" } : it)));
+      } catch (err) {
+        const message = err?.message === "NOT_A_CYCLING_ACTIVITY" || err?.message === "FIT_PARSE_FAILED"
+          ? mapFitParseError(err)
+          : mapCyclingWorkoutError(err);
+        setItems((prev) => prev.map((it) => (it.name === file.name ? { ...it, status: "error", message } : it)));
+      }
+    }
   }
 
   return (
@@ -74,12 +103,33 @@ export function UploadPage() {
                 <input type="file" accept=".fit" multiple onChange={handleFilesChosen} className="hidden" />
               </label>
               <span className="text-sm" style={{ color: C.gray }}>
-                {fileNames.length > 0 ? fileNames.join(", ") : "Nenhum arquivo selecionado"}
+                {items.length === 0 && "Nenhum arquivo selecionado"}
               </span>
             </div>
 
+            {items.length > 0 && (
+              <div className="mt-4 flex flex-col gap-2">
+                {items.map((it) => (
+                  <div
+                    key={it.name}
+                    className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm"
+                    style={{ background: C.surface2, border: `1px solid ${C.borderSoft}` }}
+                  >
+                    {it.status === "pending" && <Loader2 size={16} className="animate-spin flex-shrink-0" style={{ color: C.gray }} />}
+                    {it.status === "done" && <CheckCircle2 size={16} className="flex-shrink-0" style={{ color: C.positive }} />}
+                    {it.status === "error" && <XCircle size={16} className="flex-shrink-0" style={{ color: C.danger }} />}
+                    <div className="min-w-0">
+                      <div className="truncate" style={{ color: C.white }}>{it.name}</div>
+                      {it.status === "error" && <div className="text-xs mt-0.5" style={{ color: C.danger }}>{it.message}</div>}
+                      {it.status === "done" && <div className="text-xs mt-0.5" style={{ color: C.positive }}>Importado com sucesso</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <p className="mt-4 text-xs" style={{ color: C.gray }}>
-              Funciona com arquivos .fit, no máximo 25 MB cada. Escolha até 25 arquivos de uma vez.
+              Funciona com arquivos .fit de ciclismo (ex: MyWhoosh, Zwift, Garmin), no máximo 25 MB cada. Escolha até 25 arquivos de uma vez.
             </p>
             <p className="mt-1 text-xs" style={{ color: C.gray }}>
               Precisa de ajuda? <span style={{ color: C.positive, fontWeight: 600 }}>Fale com o suporte</span> (em breve).

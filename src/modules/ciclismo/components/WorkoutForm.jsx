@@ -1,38 +1,44 @@
 import { useState } from "react";
 import { Gauge, X } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
-import { fmtSpeed, todayStr, uid } from "../../../lib/format";
+import { fmtSpeed, todayStr } from "../../../lib/format";
 import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 import { TYPES } from "../constants";
+import { createCyclingWorkout, updateCyclingWorkout, mapCyclingWorkoutError } from "../cyclingService";
 
 const ciclismo = modalityInfo("ciclismo");
 
 /* ---------------------------------------------------------
-   NEW WORKOUT FORM
+   NEW / EDIT WORKOUT FORM
+   Salva de fato em public.cycling_workouts (Supabase) e só chama onSave
+   com o registro já retornado pelo insert/update (id e created_at reais) —
+   mesmo padrão do WorkoutForm de corrida.
 --------------------------------------------------------- */
-export function WorkoutForm({ onSave, onClose }) {
+export function WorkoutForm({ initial, onSave, onClose }) {
   useLockBodyScroll();
-  const [date, setDate] = useState(todayStr());
-  const [type, setType] = useState("endurance");
-  const [distance, setDistance] = useState("");
-  const [durMin, setDurMin] = useState("");
-  const [durSec, setDurSec] = useState("");
-  const [elevation, setElevation] = useState("");
-  const [hr, setHr] = useState("");
-  const [rpe, setRpe] = useState(5);
-  const [notes, setNotes] = useState("");
+  const [date, setDate] = useState(initial?.date ?? todayStr());
+  const [type, setType] = useState(initial?.type ?? "endurance");
+  const [distance, setDistance] = useState(initial ? String(initial.distanceKm).replace(".", ",") : "");
+  const [durMin, setDurMin] = useState(initial ? String(Math.floor(initial.durationSec / 60)) : "");
+  const [durSec, setDurSec] = useState(initial ? String(initial.durationSec % 60) : "");
+  const [elevation, setElevation] = useState(initial?.elevationGainM ? String(initial.elevationGainM) : "");
+  const [hr, setHr] = useState(initial?.avgHr ? String(initial.avgHr) : "");
+  const [rpe, setRpe] = useState(initial?.rpe ?? 5);
+  const [notes, setNotes] = useState(initial?.notes ?? "");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const distNum = parseFloat(distance.replace(",", "."));
   const totalSec = (parseInt(durMin || 0, 10) * 60) + parseInt(durSec || 0, 10);
   const speedLive = distNum > 0 && totalSec > 0 ? distNum / (totalSec / 3600) : null;
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!distNum || distNum <= 0) return setError("Informe uma distância válida.");
     if (!totalSec || totalSec <= 0) return setError("Informe o tempo do treino.");
     setError("");
-    onSave({
-      id: uid(),
+    setSaving(true);
+
+    const payload = {
       date,
       type,
       distanceKm: distNum,
@@ -40,8 +46,19 @@ export function WorkoutForm({ onSave, onClose }) {
       elevationGainM: elevation ? parseInt(elevation, 10) : null,
       avgHr: hr ? parseInt(hr, 10) : null,
       rpe,
-      notes: notes.trim(),
-    });
+      notes: notes.trim() || null,
+    };
+
+    try {
+      const saved = initial
+        ? await updateCyclingWorkout(initial.id, payload)
+        : await createCyclingWorkout(payload);
+      onSave(saved);
+    } catch (err) {
+      setError(mapCyclingWorkoutError(err));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -169,10 +186,11 @@ export function WorkoutForm({ onSave, onClose }) {
 
           <button
             onClick={handleSubmit}
-            className="mt-1 w-full rounded-xl py-3 text-sm font-semibold"
+            disabled={saving}
+            className="mt-1 w-full rounded-xl py-3 text-sm font-semibold disabled:opacity-60"
             style={{ background: `linear-gradient(135deg, ${ciclismo.color}, #FBBF24)`, color: C.bg }}
           >
-            Salvar treino
+            {saving ? "Salvando…" : "Salvar treino"}
           </button>
         </div>
       </div>

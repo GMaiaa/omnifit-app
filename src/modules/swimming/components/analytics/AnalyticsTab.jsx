@@ -12,7 +12,6 @@ import { VolumeVariationCard } from "./VolumeVariationCard";
 import { ConsistencyCard } from "./ConsistencyCard";
 import { StrokeDistributionCard } from "./StrokeDistributionCard";
 import { TypeDistributionCard } from "./TypeDistributionCard";
-import { RecordsCard } from "./RecordsCard";
 import { CycleComparisonCard } from "./CycleComparisonCard";
 
 const natacao = modalityInfo("natacao");
@@ -109,12 +108,7 @@ export function AnalyticsTab({ workouts }) {
         <TypeDistributionCard workouts={workouts} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <RecordsCard workouts={workouts} strokeId={activeStroke} />
-        </div>
-        <CycleComparisonCard workouts={workouts} />
-      </div>
+      <CycleComparisonCard workouts={workouts} />
     </div>
   );
 }

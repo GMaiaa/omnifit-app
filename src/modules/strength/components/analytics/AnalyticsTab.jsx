@@ -16,7 +16,6 @@ import { VolumeCard } from "./VolumeCard";
 import { MuscleGroupCard } from "./MuscleGroupCard";
 import { StrengthEvolutionCard } from "./StrengthEvolutionCard";
 import { ConsistencyCard } from "./ConsistencyCard";
-import { RecordsCard } from "./RecordsCard";
 import { CycleComparisonCard } from "./CycleComparisonCard";
 
 const musculacao = modalityInfo("musculacao");
@@ -106,12 +105,7 @@ export function AnalyticsTab({ sessions }) {
         <ConsistencyCard sessions={sessions} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2">
-          <RecordsCard sessions={sessions} />
-        </div>
-        <CycleComparisonCard sessions={sessions} />
-      </div>
+      <CycleComparisonCard sessions={sessions} />
     </div>
   );
 }

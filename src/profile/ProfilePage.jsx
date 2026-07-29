@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
-import { Activity, Calendar as CalendarIcon, HeartPulse, Ruler, Scale } from "lucide-react";
+import { Activity, Calendar as CalendarIcon, HeartPulse, Loader2, Ruler, Scale } from "lucide-react";
 import { C } from "../lib/theme";
 import { Card, CardHeader } from "../components/ui";
+import {
+  buildStravaAuthUrl, extractStravaRedirectCode, connectStrava,
+  getStravaConnectionStatus, disconnectStrava, mapStravaError,
+} from "../modules/strava/stravaService";
+import { StravaSyncModal } from "../modules/strava/StravaSyncModal";
 
 const SEX_OPTIONS = [
   { value: "feminino", label: "Feminino" },
@@ -13,7 +18,7 @@ const SEX_OPTIONS = [
    logo oficial até existir parceria/assets reais; o nome por extenso ao lado
    já deixa claro de qual serviço se trata. */
 const CONNECTIONS = [
-  { id: "strava", name: "Strava", color: "#FC4C02", description: "Importa treinos de todas as modalidades automaticamente." },
+  { id: "strava", name: "Strava", color: "#FC4C02", description: "Importa treinos de ciclismo automaticamente." },
   { id: "garmin", name: "Garmin Connect", color: "#007CC3", description: "Sincroniza dados de relógios e sensores Garmin." },
   { id: "mywhoosh", name: "MyWhoosh", color: "#00B2A9", description: "Traz treinos indoor de ciclismo da plataforma." },
 ];
@@ -42,9 +47,13 @@ function Field({ label, icon: Icon, children }) {
 
 const inputClass = "w-full rounded-xl px-3 py-2.5 text-sm outline-none";
 
-export function ProfilePage({ profile, loading, saveError, onSave }) {
+export function ProfilePage({ profile, loading, saveError, onSave, onStravaSynced }) {
   const [form, setForm] = useState({ weightKg: "", heightCm: "", birthDate: "", sex: "", restingHr: "", maxHr: "" });
   const [saved, setSaved] = useState(false);
+
+  const [strava, setStrava] = useState({ status: "loading", athleteId: null }); // loading | connected | disconnected
+  const [stravaError, setStravaError] = useState("");
+  const [showSyncModal, setShowSyncModal] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -58,6 +67,28 @@ export function ProfilePage({ profile, loading, saveError, onSave }) {
       });
     }
   }, [loading, profile]);
+
+  useEffect(() => {
+    (async () => {
+      const redirect = extractStravaRedirectCode();
+      if (redirect?.error) {
+        setStravaError("Autorização com o Strava cancelada ou negada.");
+      } else if (redirect?.code) {
+        try {
+          await connectStrava(redirect.code);
+        } catch (err) {
+          setStravaError(mapStravaError(err, "Não foi possível conectar sua conta do Strava."));
+        }
+      }
+
+      try {
+        const status = await getStravaConnectionStatus();
+        setStrava(status.connected ? { status: "connected", athleteId: status.athleteId } : { status: "disconnected" });
+      } catch {
+        setStrava({ status: "disconnected" });
+      }
+    })();
+  }, []);
 
   function handleChange(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -74,6 +105,17 @@ export function ProfilePage({ profile, loading, saveError, onSave }) {
       maxHr: form.maxHr ? parseInt(form.maxHr, 10) : null,
     });
     setSaved(true);
+  }
+
+  async function handleStravaDisconnect() {
+    setStravaError("");
+    try {
+      await disconnectStrava();
+      setStrava({ status: "disconnected" });
+      setSyncMessage("");
+    } catch (err) {
+      setStravaError(mapStravaError(err, "Não foi possível desconectar do Strava."));
+    }
   }
 
   const inputStyle = { background: C.surface2, border: `1px solid ${C.border}`, color: C.white };
@@ -155,30 +197,112 @@ export function ProfilePage({ profile, loading, saveError, onSave }) {
           description="Sincronize treinos automaticamente de outros apps e relógios."
         />
         <div className="flex flex-col gap-3">
-          {CONNECTIONS.map((c) => (
-            <div
-              key={c.id}
-              className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 flex-wrap"
-              style={{ background: C.surface2, border: `1px solid ${C.borderSoft}` }}
-            >
-              <div className="flex items-center gap-3">
-                <BrandBadge name={c.name} color={c.color} />
-                <div>
-                  <div style={{ color: C.white, fontWeight: 600, fontSize: 14 }}>{c.name}</div>
-                  <div style={{ color: C.gray, fontSize: 12 }}>{c.description}</div>
+          {CONNECTIONS.map((c) => {
+            if (c.id !== "strava") {
+              return (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 flex-wrap"
+                  style={{ background: C.surface2, border: `1px solid ${C.borderSoft}` }}
+                >
+                  <div className="flex items-center gap-3">
+                    <BrandBadge name={c.name} color={c.color} />
+                    <div>
+                      <div style={{ color: C.white, fontWeight: 600, fontSize: 14 }}>{c.name}</div>
+                      <div style={{ color: C.gray, fontSize: 12 }}>{c.description}</div>
+                    </div>
+                  </div>
+                  <button
+                    disabled
+                    className="rounded-full px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed"
+                    style={{ color: C.gray, border: `1px solid ${C.border}` }}
+                  >
+                    Em breve
+                  </button>
+                </div>
+              );
+            }
+
+            const isConnected = strava.status === "connected";
+            let stravaAuthUrl = null;
+            let stravaNotConfigured = false;
+            try {
+              stravaAuthUrl = buildStravaAuthUrl();
+            } catch {
+              stravaNotConfigured = true;
+            }
+
+            return (
+              <div
+                key={c.id}
+                className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 flex-wrap"
+                style={{ background: C.surface2, border: `1px solid ${C.borderSoft}` }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex items-center justify-center rounded-full flex-shrink-0"
+                    style={{ width: 40, height: 40, background: "color-mix(in srgb, #FC5200 12%, transparent)" }}
+                  >
+                    <img
+                      src="/brand/strava-powered-by-stack-orange.svg"
+                      alt="Strava"
+                      style={{ height: 26, width: "auto" }}
+                    />
+                  </div>
+                  <div>
+                    <div style={{ color: C.white, fontWeight: 600, fontSize: 14 }}>{c.name}</div>
+                    <div style={{ color: C.gray, fontSize: 12 }}>
+                      {isConnected ? "Conectado — Sincronizar importa todo o histórico de ciclismo e corrida." : c.description}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {strava.status === "loading" ? (
+                    <Loader2 size={16} className="animate-spin" style={{ color: C.gray }} />
+                  ) : isConnected ? (
+                    <>
+                      <button
+                        onClick={() => setShowSyncModal(true)}
+                        className="rounded-full px-4 py-2 text-xs font-semibold flex items-center gap-1.5"
+                        style={{ background: `${c.color}26`, color: c.color }}
+                      >
+                        Sincronizar
+                      </button>
+                      <button
+                        onClick={handleStravaDisconnect}
+                        className="rounded-full px-4 py-2 text-xs font-semibold"
+                        style={{ color: C.gray, border: `1px solid ${C.border}` }}
+                      >
+                        Desconectar
+                      </button>
+                    </>
+                  ) : stravaNotConfigured ? (
+                    <span className="text-xs" style={{ color: C.gray }}>Integração ainda não configurada</span>
+                  ) : (
+                    <a href={stravaAuthUrl} aria-label="Conectar com o Strava">
+                      <img
+                        src="/brand/strava-connect-orange.svg"
+                        srcSet="/brand/strava-connect-orange.svg 1x, /brand/strava-connect-orange@2x.svg 2x"
+                        alt="Connect with Strava"
+                        height={40}
+                        style={{ display: "block", height: 40, width: "auto" }}
+                      />
+                    </a>
+                  )}
                 </div>
               </div>
-              <button
-                disabled
-                className="rounded-full px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed"
-                style={{ color: C.gray, border: `1px solid ${C.border}` }}
-              >
-                Em breve
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
+        {stravaError && <div className="mt-3 text-xs" style={{ color: C.danger }}>{stravaError}</div>}
       </Card>
+
+      {showSyncModal && (
+        <StravaSyncModal
+          onClose={() => setShowSyncModal(false)}
+          onSynced={() => onStravaSynced?.()}
+        />
+      )}
     </div>
   );
 }

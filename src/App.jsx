@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Bell, ChevronDown, Dumbbell, Bike, Waves, Flame, Footprints, Lock, LogOut, Moon, Plus, Settings, Sun, User as UserIcon,
+  ChevronDown, Dumbbell, Bike, Waves, Flame, Footprints, Lock, LogOut, Moon, Plus, Settings, Sun, User as UserIcon,
 } from "lucide-react";
 import { BRAND_GRADIENT, C, MODALITIES } from "./lib/theme";
 import { applyTheme, getInitialTheme } from "./lib/themeMode";
 import { useAuth } from "./auth/AuthContext";
 import { LogoMark } from "./components/ui";
+import { NotificationsBell } from "./components/NotificationsBell";
 import { ModuleComingSoon } from "./components/ModuleComingSoon";
 import { Home } from "./home/Home";
 import { RunningModule } from "./modules/running/RunningModule";
@@ -23,11 +24,18 @@ import { useCyclingWorkouts } from "./modules/ciclismo/useCyclingWorkouts";
 import { ProfilePage } from "./profile/ProfilePage";
 import { useUserProfile } from "./profile/useUserProfile";
 import { UploadPage } from "./upload/UploadPage";
+import { Vo2MaxPage } from "./modules/vo2max/Vo2MaxPage";
 
 const MODALITY_ICONS = { Footprints, Dumbbell, Bike, Waves, Flame };
 
 export default function OmnifitApp() {
-  const [tab, setTab] = useState("home");
+  const [tab, setTab] = useState(() => {
+    // Se o usuário acabou de voltar do fluxo de autorização do Strava
+    // (redirect_uri = raiz do app), abre direto em Perfil, que é quem
+    // processa o ?code= da URL — senão o retorno nunca seria lido.
+    const params = new URLSearchParams(window.location.search);
+    return params.has("code") || params.has("error") ? "perfil" : "home";
+  });
   const [theme, setTheme] = useState(getInitialTheme);
   const [activityOpen, setActivityOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -104,7 +112,11 @@ export default function OmnifitApp() {
         className="sticky top-0 z-30 flex items-center justify-between px-4 sm:px-8 py-3.5"
         style={{ background: `color-mix(in srgb, ${C.bg} 95%, transparent)`, borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}
       >
-        <div className="flex items-center gap-0.5">
+        <button
+          onClick={() => setTab("home")}
+          className="flex items-center gap-0.5 text-left"
+          aria-label="Ir para a tela inicial"
+        >
           <LogoMark size={72} />
           <div>
             <div style={{ fontWeight: 800, fontSize: 24, letterSpacing: -0.3 }}>OMNIFIT</div>
@@ -112,7 +124,7 @@ export default function OmnifitApp() {
               Visão completa da sua performance
             </div>
           </div>
-        </div>
+        </button>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={toggleTheme}
@@ -124,14 +136,7 @@ export default function OmnifitApp() {
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
           </button>
 
-          <button
-            aria-label="Notificações"
-            title="Notificações"
-            className="flex items-center justify-center rounded-full p-2"
-            style={{ color: C.gray, border: `1px solid ${C.border}` }}
-          >
-            <Bell size={16} />
-          </button>
+          <NotificationsBell />
 
           <div className="relative" ref={profileMenuRef}>
             <button
@@ -213,6 +218,17 @@ export default function OmnifitApp() {
         </button>
 
         <button
+          onClick={() => { setTab("vo2max"); setActivityOpen(false); }}
+          className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-full"
+          style={{
+            color: tab === "vo2max" ? "#00AEEF" : C.gray,
+            background: tab === "vo2max" ? "#00AEEF1A" : "transparent",
+          }}
+        >
+          VO2 Máx
+        </button>
+
+        <button
           onClick={() => setActivityOpen((v) => !v)}
           className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-full"
           style={{
@@ -257,6 +273,8 @@ export default function OmnifitApp() {
             cyclingWorkouts={cycling.workouts}
             onOpenModule={setTab}
           />
+        ) : tab === "vo2max" ? (
+          <Vo2MaxPage workouts={running.workouts} />
         ) : tab === "corrida" ? (
           <RunningModule {...running} startWithFormOpen={pendingRecordTarget === "corrida"} />
         ) : tab === "musculacao" ? (
@@ -273,9 +291,10 @@ export default function OmnifitApp() {
             loading={userProfile.loading}
             saveError={userProfile.saveError}
             onSave={userProfile.updateProfile}
+            onStravaSynced={() => { cycling.refetch(); running.refetch(); }}
           />
         ) : tab === "upload" ? (
-          <UploadPage />
+          <UploadPage onCyclingWorkoutCreated={cycling.addWorkout} />
         ) : (
           <ModuleComingSoon modality={activeModality} />
         )}
