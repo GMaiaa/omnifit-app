@@ -62,7 +62,7 @@ export function Vo2MaxPage({ workouts }) {
       <EmptyState
         icon={Gauge}
         title="Ainda não há dados suficientes"
-        description="O VO2 Máx é estimado a partir de treinos de longão, tempo run ou prova. Registre alguns treinos desses tipos com distância e duração pra desbloquear essa aba."
+        description="O VO2 Máx é estimado a partir dos seus treinos de corrida (qualquer tipo) com distância e duração registradas. Registre ou sincronize alguns treinos pra desbloquear essa aba."
       />
     );
   }
@@ -90,7 +90,7 @@ export function Vo2MaxPage({ workouts }) {
           <div className="flex items-start gap-1.5 max-w-xs text-right sm:text-left" style={{ color: C.gray }}>
             <Info size={13} className="mt-0.5 flex-shrink-0" />
             <p className="text-xs">
-              Estimativa via fórmula de Daniels &amp; Gilbert, calculada a partir dos seus treinos de longão/tempo run/prova — não é uma medição laboratorial.
+              Estimativa via fórmula de Daniels &amp; Gilbert, calculada a partir dos seus treinos de corrida — não é uma medição laboratorial. Treinos leves/regenerativos tendem a subestimar o valor.
             </p>
           </div>
         </div>
