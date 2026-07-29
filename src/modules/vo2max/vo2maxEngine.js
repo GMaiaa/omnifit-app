@@ -10,10 +10,16 @@
    medição clínica — o app deixa isso explícito na interface.
 --------------------------------------------------------- */
 
-// Tipos de treino tratados como "esforço contínuo representativo": pace
-// médio de treinos regenerativos/intervalados não reflete o esforço
-// máximo sustentado necessário pra fórmula fazer sentido.
-const QUALIFYING_TYPES = new Set(["longo", "tempo_run", "prova"]);
+// Antes, só entravam aqui longão/tempo run/prova (esforço "de referência").
+// Isso deixava a aba vazia pra quem importa o histórico do Strava, porque
+// a maioria dos treinos sincronizados cai como "rodagem" (tipo padrão
+// quando o Strava não informa workout_type). Agora todos os tipos contam;
+// os filtros de duração/distância abaixo continuam existindo só pra evitar
+// contas sem sentido (ex: um sprint de 200m não entra na fórmula).
+// Ressalva: treinos fáceis/regenerativos tendem a subestimar o VO2 máx
+// real, já que a fórmula assume esforço perto do máximo sustentável —
+// mas como "atual" usa o melhor valor da janela recente (ver
+// currentVo2Max), um treino forte isolado ainda corrige isso na prática.
 const MIN_DURATION_MIN = 8;
 const MAX_DURATION_MIN = 150;
 const MIN_DISTANCE_KM = 1.5;
@@ -45,7 +51,7 @@ export function estimateVO2Max(distanceKm, durationSec) {
    por data crescente — pronto pro gráfico de evolução. */
 export function buildVo2History(workouts) {
   return workouts
-    .filter((w) => QUALIFYING_TYPES.has(w.type) && w.distanceKm > 0 && w.durationSec > 0)
+    .filter((w) => w.distanceKm > 0 && w.durationSec > 0)
     .map((w) => ({ date: w.date, vo2max: estimateVO2Max(w.distanceKm, w.durationSec), type: w.type }))
     .filter((p) => p.vo2max !== null)
     .sort((a, b) => (a.date < b.date ? -1 : 1));
