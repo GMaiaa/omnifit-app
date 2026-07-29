@@ -154,6 +154,11 @@ export function StravaSyncModal({ onClose, onSynced }) {
                     {totalFailed} atividade(s) não puderam ser salvas. {result.lastError && `Detalhe: ${result.lastError}`}
                   </div>
                 )}
+                {result.skipped > 0 && (
+                  <div className="text-xs rounded-lg px-3 py-2" style={{ background: C.surface2, color: C.gray }}>
+                    {result.skipped} atividade(s) ignorada(s) por não terem distância/duração válidas (ex: teste no rolo sem GPS).
+                  </div>
+                )}
               </>
             )}
             <button
