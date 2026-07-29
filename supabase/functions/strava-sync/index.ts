@@ -107,8 +107,13 @@ Deno.serve(async (req) => {
 
     const activities = await fetchActivities(accessToken, afterUnix);
 
-    const cyclingActivities = activities.filter((a: { type: string }) => CYCLING_TYPES.has(a.type));
-    const runningActivities = activities.filter((a: { type: string }) => RUNNING_TYPES.has(a.type));
+    const isValid = (a: { distance: number; moving_time: number }) => a.distance > 0 && a.moving_time > 0;
+
+    const cyclingCandidates = activities.filter((a: { type: string }) => CYCLING_TYPES.has(a.type));
+    const runningCandidates = activities.filter((a: { type: string }) => RUNNING_TYPES.has(a.type));
+    const cyclingActivities = cyclingCandidates.filter(isValid);
+    const runningActivities = runningCandidates.filter(isValid);
+    const skipped = (cyclingCandidates.length - cyclingActivities.length) + (runningCandidates.length - runningActivities.length);
 
     let cyclingImported = 0;
     let cyclingFailed = 0;
@@ -180,6 +185,7 @@ Deno.serve(async (req) => {
         runningImported,
         cyclingFailed,
         runningFailed,
+        skipped,
         totalFetched: activities.length,
         lastError,
       }),
