@@ -4,7 +4,7 @@ import { C, modalityInfo } from "../../../lib/theme";
 import { uid } from "../../../lib/format";
 import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
 import { DEFAULT_SETS, muscleGroupInfo } from "../constants";
-import { createStrengthTemplate, mapStrengthError } from "../strengthService";
+import { createStrengthTemplate, mapStrengthError, updateStrengthTemplate } from "../strengthService";
 import { ExercisePicker } from "./ExercisePicker";
 
 const musculacao = modalityInfo("musculacao");
@@ -23,11 +23,8 @@ function newExerciseRow(entry) {
 
 /* ---------------------------------------------------------
    CREATE / EDIT TEMPLATE ("ficha") — bottom-sheet, same shell as
-   running/WorkoutForm.jsx.
-
-   Só a criação (initial === null) já está integrada ao Supabase
-   (public.strength_templates). Edição continua salvando localmente até a
-   próxima parte da integração — ver strengthService.js.
+   running/WorkoutForm.jsx. Criação e edição batem direto em
+   public.strength_templates — ver strengthService.js.
 --------------------------------------------------------- */
 export function TemplateForm({ initial, onSave, onClose }) {
   useLockBodyScroll();
@@ -72,32 +69,21 @@ export function TemplateForm({ initial, onSave, onClose }) {
 
     const orderedExercises = exercises.map((e, i) => ({ ...e, order: i }));
 
-    if (isEdit) {
-      // Edição ainda não bate no Supabase — mantém o comportamento local
-      // (mock) até a próxima parte da integração.
-      onSave({
-        id: initial.id,
-        name: name.trim(),
-        exercises: orderedExercises,
-        createdAt: initial.createdAt,
-        updatedAt: new Date().toISOString(),
-      });
-      return;
-    }
-
     setSubmitting(true);
     try {
-      const createdTemplate = await createStrengthTemplate({ name: name.trim(), exercises: orderedExercises });
+      const savedTemplate = isEdit
+        ? await updateStrengthTemplate(initial.id, { name: name.trim(), exercises: orderedExercises })
+        : await createStrengthTemplate({ name: name.trim(), exercises: orderedExercises });
       setSubmitting(false);
       setSuccess(true);
 
       // usa o registro retornado pelo Supabase (id/created_at/updated_at
       // reais) para incluir no estado compartilhado — nada de reconsultar
       // a lista inteira.
-      setTimeout(() => onSave(createdTemplate), 900);
+      setTimeout(() => onSave(savedTemplate), 900);
     } catch (err) {
       setSubmitting(false);
-      setError(mapStrengthError(err, "Não foi possível cadastrar o treino. Tente novamente."));
+      setError(mapStrengthError(err, isEdit ? "Não foi possível salvar as alterações. Tente novamente." : "Não foi possível cadastrar o treino. Tente novamente."));
     }
   }
 
@@ -159,7 +145,13 @@ export function TemplateForm({ initial, onSave, onClose }) {
                         <span className="text-xs" style={{ color: C.gray }}>séries</span>
                         <input
                           type="number" min="1" max="10" value={ex.defaultSets}
-                          onChange={(e) => updateExercise(ex.id, { defaultSets: Math.max(1, parseInt(e.target.value || 1, 10)) })}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            updateExercise(ex.id, { defaultSets: raw === "" ? "" : Math.max(1, parseInt(raw, 10) || 1) });
+                          }}
+                          onBlur={(e) => {
+                            if (e.target.value === "") updateExercise(ex.id, { defaultSets: DEFAULT_SETS });
+                          }}
                           disabled={busy}
                           className="w-12 rounded-lg px-1.5 py-1 text-xs text-center outline-none disabled:opacity-60"
                           style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.white }}
@@ -188,7 +180,7 @@ export function TemplateForm({ initial, onSave, onClose }) {
 
           {success && (
             <div className="flex items-center gap-2 text-sm" style={{ color: C.positive }}>
-              <CheckCircle2 size={16} /> Treino criado com sucesso!
+              <CheckCircle2 size={16} /> {isEdit ? "Treino atualizado com sucesso!" : "Treino criado com sucesso!"}
             </div>
           )}
 
@@ -201,7 +193,7 @@ export function TemplateForm({ initial, onSave, onClose }) {
             {submitting
               ? "Salvando…"
               : success
-                ? "Treino criado!"
+                ? (isEdit ? "Treino atualizado!" : "Treino criado!")
                 : (isEdit ? "Salvar alterações" : "Criar treino")}
           </button>
         </div>

@@ -91,6 +91,51 @@ export async function createStrengthTemplate({ name, exercises }) {
   return mapTemplateRow(data);
 }
 
+/* Atualiza uma ficha existente em public.strength_templates. Não filtra por
+   user_id no client: a política de RLS de update (auth.uid() = user_id) é
+   quem garante que só o dono do registro consegue alterá-lo — se o id
+   pertencer a outro usuário, a query simplesmente não afeta nenhuma linha e
+   o .single() abaixo lança, o que já cai no mapeamento de erro genérico. */
+export async function updateStrengthTemplate(id, { name, exercises }) {
+  if (!name || !name.trim()) {
+    throw new Error("INVALID_NAME");
+  }
+  if (!Array.isArray(exercises) || exercises.length === 0) {
+    throw new Error("EMPTY_EXERCISES");
+  }
+
+  const { data, error } = await supabase
+    .from("strength_templates")
+    .update({ name: name.trim(), exercises })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    if (import.meta.env.DEV) console.error("[strength_templates] update falhou:", error);
+    throw error;
+  }
+
+  return mapTemplateRow(data);
+}
+
+/* Exclui uma ficha de public.strength_templates. Sessões que referenciam
+   essa ficha continuam existindo (template_id aceita null) — só perdem o
+   vínculo, mantendo template_name já salvo em cada uma para exibição.
+   Mesma lógica de segurança do update: a política de RLS de delete é quem
+   restringe a exclusão ao dono do registro. */
+export async function deleteStrengthTemplate(id) {
+  const { error } = await supabase
+    .from("strength_templates")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    if (import.meta.env.DEV) console.error("[strength_templates] delete falhou:", error);
+    throw error;
+  }
+}
+
 /* Busca o histórico de execuções do usuário autenticado, mais recentes
    primeiro (mesmo critério de desempate de modules/running: data desc,
    created_at desc). Mesma lógica de RLS de getStrengthTemplates. */
@@ -159,6 +204,55 @@ export async function createStrengthSession({
   }
 
   return mapSessionRow(data);
+}
+
+/* Atualiza uma execução existente em public.strength_sessions (corrigir
+   carga/reps registradas, data, duração ou notas). Mesma lógica de
+   segurança do update de fichas: RLS restringe ao dono do registro. */
+export async function updateStrengthSession(id, {
+  templateId = null, templateName, date, startedAt = null, finishedAt = null,
+  durationSec = 0, notes = null, exercises,
+}) {
+  if (!Array.isArray(exercises) || exercises.length === 0) {
+    throw new Error("EMPTY_EXERCISES");
+  }
+
+  const { data, error } = await supabase
+    .from("strength_sessions")
+    .update({
+      template_id: templateId,
+      template_name: templateName,
+      date,
+      started_at: startedAt,
+      finished_at: finishedAt,
+      duration_sec: durationSec,
+      notes,
+      exercises,
+    })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    if (import.meta.env.DEV) console.error("[strength_sessions] update falhou:", error);
+    throw error;
+  }
+
+  return mapSessionRow(data);
+}
+
+/* Exclui uma execução de public.strength_sessions. Mesma lógica de
+   segurança do update: RLS restringe a exclusão ao dono do registro. */
+export async function deleteStrengthSession(id) {
+  const { error } = await supabase
+    .from("strength_sessions")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    if (import.meta.env.DEV) console.error("[strength_sessions] delete falhou:", error);
+    throw error;
+  }
 }
 
 /* Traduz erros técnicos (auth ausente, RLS, constraints, rede) para

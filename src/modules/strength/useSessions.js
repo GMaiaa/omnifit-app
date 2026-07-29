@@ -12,8 +12,9 @@ function sortSessions(list) {
 }
 
 /* Busca o histórico de execuções em public.strength_sessions. Mesmo padrão
-   de useTemplates.js: a leitura e a inclusão (via addSession, chamado com o
-   registro já retornado pelo insert) já são o banco de verdade. */
+   de useTemplates.js: leitura, inclusão, edição e exclusão já são o banco de
+   verdade — addSession/updateSession/deleteSession só refletem no estado
+   local o que o caller já confirmou com strengthService.js. */
 export function useSessions() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,9 +44,16 @@ export function useSessions() {
     setSessions((prev) => (prev.some((existing) => existing.id === s.id) ? prev : sortSessions([s, ...prev])));
   }, []);
 
+  /* Substitui o registro editado pela versão já retornada pelo update (mesmo
+     raciocínio do addSession) — reordena porque a data editada pode ter
+     mudado a posição da sessão na lista. */
+  const updateSession = useCallback((updated) => {
+    setSessions((prev) => sortSessions(prev.map((s) => (s.id === updated.id ? updated : s))));
+  }, []);
+
   const deleteSession = useCallback((id) => {
     setSessions((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
-  return { sessions, loading, error, addSession, deleteSession, refetch: fetchSessions };
+  return { sessions, loading, error, addSession, updateSession, deleteSession, refetch: fetchSessions };
 }

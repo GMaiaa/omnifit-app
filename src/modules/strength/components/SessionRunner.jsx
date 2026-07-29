@@ -185,8 +185,9 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
         order: i,
         sets: ex.sets
           .map((s) => {
-            if (s.status === "skipped") return { ...s, weight: s.weight ?? null, reps: s.reps ?? null };
-            if (s.weight > 0 && s.reps > 0) return { ...s, status: "done" };
+            const weight = s.weight === null || s.weight === "" ? null : parseFloat(s.weight);
+            if (s.status === "skipped") return { ...s, weight, reps: s.reps ?? null };
+            if (weight > 0 && s.reps > 0) return { ...s, weight, status: "done" };
             return null; // empty, never touched — drop it
           })
           .filter(Boolean),
@@ -347,9 +348,13 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
                     >
                       <span className="text-xs w-4 flex-shrink-0" style={{ color: C.gray }}>{si + 1}</span>
                       <input
-                        type="number" inputMode="decimal" placeholder="kg" value={s.weight ?? ""}
+                        type="text" inputMode="decimal" placeholder="kg" value={s.weight ?? ""}
                         disabled={skipped}
-                        onChange={(e) => updateSet(ex.id, s.id, { weight: e.target.value === "" ? null : parseFloat(e.target.value) })}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(",", ".");
+                          if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
+                          updateSet(ex.id, s.id, { weight: raw === "" ? null : raw });
+                        }}
                         className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none"
                         style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
                       />

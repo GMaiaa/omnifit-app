@@ -2,11 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { getStrengthTemplates, mapStrengthError } from "./strengthService";
 
 /* Busca as fichas reais de public.strength_templates. Mesmo padrão de
-   modules/running/useWorkouts.js: a leitura e a criação (via addTemplate,
-   chamado com o registro já retornado pelo insert) já são o banco de
-   verdade. Editar/excluir ainda não têm um serviço equivalente — por ora só
-   atualizam o estado local desta sessão, sem persistir (a próxima parte da
-   integração troca isso por update/delete reais em strength_templates). */
+   modules/running/useWorkouts.js: leitura, criação, edição e exclusão já são
+   o banco de verdade — addTemplate/updateTemplate/deleteTemplate só refletem
+   no estado local o que o caller já confirmou com strengthService.js. */
 export function useTemplates() {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +35,7 @@ export function useTemplates() {
   }, []);
 
   const updateTemplate = useCallback((id, patch) => {
-    setTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t)));
+    setTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }, []);
 
   const deleteTemplate = useCallback((id) => {

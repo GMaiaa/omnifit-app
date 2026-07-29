@@ -3,12 +3,16 @@ import { AlertTriangle, BarChart3, ListChecks, PlusCircle } from "lucide-react";
 import { C, modalityInfo } from "../../lib/theme";
 import { uid } from "../../lib/format";
 import { DEFAULT_SETS } from "./constants";
-import { createStrengthSession, createStrengthTemplate, mapStrengthError } from "./strengthService";
+import {
+  createStrengthSession, createStrengthTemplate, deleteStrengthSession, deleteStrengthTemplate,
+  mapStrengthError, updateStrengthSession, updateStrengthTemplate,
+} from "./strengthService";
 import { Card, EmptyState } from "../../components/ui";
 import { TemplateCard } from "./components/TemplateCard";
 import { TemplateForm } from "./components/TemplateForm";
 import { TemplateDetail } from "./components/TemplateDetail";
 import { SessionRunner } from "./components/SessionRunner";
+import { SessionEditor } from "./components/SessionEditor";
 import { AnalyticsTab } from "./components/analytics/AnalyticsTab";
 
 const musculacao = modalityInfo("musculacao");
@@ -36,6 +40,7 @@ export function StrengthModule({ templates, sessions }) {
   const [formTarget, setFormTarget] = useState(null); // null | true (new) | template (edit)
   const [detailTemplate, setDetailTemplate] = useState(null);
   const [activeSession, setActiveSession] = useState(null);
+  const [editingSession, setEditingSession] = useState(null);
   const [summary, setSummary] = useState(null);
   const [actionError, setActionError] = useState("");
 
@@ -46,10 +51,50 @@ export function StrengthModule({ templates, sessions }) {
     setFormTarget(null);
   }
 
-  function handleDeleteTemplate(id) {
+  async function handleDeleteTemplate(id) {
     if (!window.confirm("Excluir este treino? O histórico de execuções continua salvo.")) return;
-    templates.deleteTemplate(id);
-    if (detailTemplate?.id === id) setDetailTemplate(null);
+    setActionError("");
+    try {
+      await deleteStrengthTemplate(id);
+      templates.deleteTemplate(id);
+      if (detailTemplate?.id === id) setDetailTemplate(null);
+    } catch (err) {
+      setActionError(mapStrengthError(err, "Não foi possível excluir o treino. Tente novamente."));
+    }
+  }
+
+  /* onSave do SessionEditor: erros sobem como Error (mensagem já traduzida)
+     para o modal continuar aberto com os dados intactos, mesmo padrão de
+     handleSessionComplete/SessionRunner. */
+  async function handleUpdateSession(session) {
+    let updated;
+    try {
+      updated = await updateStrengthSession(session.id, {
+        templateId: session.templateId,
+        templateName: session.templateName,
+        date: session.date,
+        startedAt: session.startedAt,
+        finishedAt: session.finishedAt,
+        durationSec: session.durationSec,
+        notes: session.notes,
+        exercises: session.exercises,
+      });
+    } catch (err) {
+      throw new Error(mapStrengthError(err, "Não foi possível salvar as alterações. Tente novamente."));
+    }
+    sessions.updateSession(updated);
+    setEditingSession(null);
+  }
+
+  async function handleDeleteSession(id) {
+    if (!window.confirm("Excluir esta execução? Essa ação não pode ser desfeita.")) return;
+    setActionError("");
+    try {
+      await deleteStrengthSession(id);
+      sessions.deleteSession(id);
+    } catch (err) {
+      setActionError(mapStrengthError(err, "Não foi possível excluir o treino. Tente novamente."));
+    }
   }
 
   /* Grava a execução em public.strength_sessions. Se o insert falhar, joga o
@@ -77,11 +122,17 @@ export function StrengthModule({ templates, sessions }) {
     sessions.addSession(createdSession);
 
     if (action.type === "update") {
-      // Ainda não há update real de ficha — atualiza só o estado local
-      // desta sessão (mesma limitação de handleSaveTemplate).
-      templates.updateTemplate(createdSession.templateId, {
-        exercises: buildTemplateExercisesFromSession(createdSession.exercises),
-      });
+      try {
+        const updatedTemplate = await updateStrengthTemplate(createdSession.templateId, {
+          name: createdSession.templateName,
+          exercises: buildTemplateExercisesFromSession(createdSession.exercises),
+        });
+        templates.updateTemplate(updatedTemplate.id, updatedTemplate);
+      } catch (err) {
+        // O treino já foi salvo — só a atualização da ficha falhou. Avisa
+        // sem desfazer o que já deu certo (mesmo padrão do ramo "new" abaixo).
+        setActionError(mapStrengthError(err, "Treino salvo, mas não foi possível atualizar a ficha."));
+      }
     } else if (action.type === "new") {
       try {
         const newTemplate = await createStrengthTemplate({
@@ -224,6 +275,8 @@ export function StrengthModule({ templates, sessions }) {
           onEdit={() => { setFormTarget(detailTemplate); setDetailTemplate(null); }}
           onDelete={() => handleDeleteTemplate(detailTemplate.id)}
           onStart={() => { setActiveSession(detailTemplate); setDetailTemplate(null); }}
+          onEditSession={setEditingSession}
+          onDeleteSession={handleDeleteSession}
         />
       )}
 
@@ -233,6 +286,14 @@ export function StrengthModule({ templates, sessions }) {
           sessions={sessions.sessions}
           onComplete={handleSessionComplete}
           onClose={() => setActiveSession(null)}
+        />
+      )}
+
+      {editingSession && (
+        <SessionEditor
+          session={editingSession}
+          onSave={handleUpdateSession}
+          onClose={() => setEditingSession(null)}
         />
       )}
     </div>

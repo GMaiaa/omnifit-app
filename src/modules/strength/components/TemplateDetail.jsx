@@ -10,7 +10,7 @@ import { Card, CardHeader, Pill, Select } from "../../../components/ui";
 
 const musculacao = modalityInfo("musculacao");
 
-export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, onStart }) {
+export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, onStart, onEditSession, onDeleteSession }) {
   useLockBodyScroll();
   const templateSessions = useMemo(
     () => sessions.filter((s) => s.templateId === template.id),
@@ -123,6 +123,20 @@ export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, 
                     <span style={{ color: C.gray }}>•</span>
                     <span>{fmtDuration(s.durationSec)}</span>
                   </div>
+                  {(onEditSession || onDeleteSession) && (
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {onEditSession && (
+                        <button onClick={() => onEditSession(s)} className="p-1.5 rounded-lg" style={{ color: C.gray }}>
+                          <Pencil size={13} />
+                        </button>
+                      )}
+                      {onDeleteSession && (
+                        <button onClick={() => onDeleteSession(s.id)} className="p-1.5 rounded-lg" style={{ color: C.gray }}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
