@@ -1,7 +1,5 @@
 import { supabase } from "../lib/supabase";
 
-/* Checa se o usuário atual é admin — usada pra decidir se mostra a aba
-   Admin na navegação. Não expõe nenhum dado sensível, só um booleano. */
 export async function isCurrentUserAdmin() {
   try {
     const { data, error } = await supabase.rpc("is_current_user_admin");
@@ -12,20 +10,47 @@ export async function isCurrentUserAdmin() {
   }
 }
 
-/* Busca as métricas gerais do produto (usuários, treinos, conexões com o
-   Strava). Lança se o usuário não for admin — as próprias funções no
-   banco fazem essa checagem, então isso nunca deveria disparar pra
-   ninguém que não tenha passado por isCurrentUserAdmin() antes. */
-export async function getAdminOverview() {
-  const { data, error } = await supabase.rpc("admin_get_overview");
+/* Checa se a conta atual está marcada como "teste" — usado pro item de
+   menu no dropdown de perfil (self-serviço, qualquer usuário pode marcar
+   a própria conta). */
+export async function isCurrentUserTest() {
+  try {
+    const { data, error } = await supabase.rpc("is_current_user_test");
+    if (error) return false;
+    return Boolean(data);
+  } catch {
+    return false;
+  }
+}
+
+/* Alterna a própria conta como teste/não-teste. */
+export async function setMyTestStatus(markAsTest) {
+  const { error } = await supabase.rpc("set_my_test_status", { mark_as_test: markAsTest });
+  if (error) throw error;
+}
+
+export async function getAdminOverview(excludeTest = true) {
+  const { data, error } = await supabase.rpc("admin_get_overview", { exclude_test: excludeTest });
   if (error) throw error;
   return data;
 }
 
-export async function getAdminDailyActivity(days = 30) {
-  const { data, error } = await supabase.rpc("admin_get_daily_activity", { days });
+export async function getAdminDailyActivity(days = 30, excludeTest = true) {
+  const { data, error } = await supabase.rpc("admin_get_daily_activity", { days, exclude_test: excludeTest });
   if (error) throw error;
   return (data ?? []).map((row) => ({ day: row.day, count: Number(row.count) }));
+}
+
+export async function getAdminDailyLogins(days = 30, excludeTest = true) {
+  const { data, error } = await supabase.rpc("admin_get_daily_logins", { days, exclude_test: excludeTest });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ day: row.day, count: Number(row.count) }));
+}
+
+export async function getAdminComparisons(excludeTest = true) {
+  const { data, error } = await supabase.rpc("admin_get_comparisons", { exclude_test: excludeTest });
+  if (error) throw error;
+  return data;
 }
 
 export async function getAdminStravaApiUsage() {

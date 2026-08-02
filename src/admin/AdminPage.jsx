@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
-import { Users, Activity, TrendingUp, Zap, Bike, ExternalLink, Loader2, AlertTriangle } from "lucide-react";
+import { Users, Activity, TrendingUp, Zap, Bike, ExternalLink, Loader2, AlertTriangle, LogIn, FlaskConical } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { C } from "../lib/theme";
-import { Card, CardHeader } from "../components/ui";
-import { getAdminOverview, getAdminDailyActivity, getAdminStravaApiUsage } from "./adminService";
+import { Card, CardHeader, DeltaBadge } from "../components/ui";
+import {
+  getAdminOverview, getAdminDailyActivity, getAdminDailyLogins,
+  getAdminComparisons, getAdminStravaApiUsage,
+} from "./adminService";
 
 function StatBlock({ label, value, icon: Icon, hint }) {
   return (
@@ -17,15 +20,30 @@ function StatBlock({ label, value, icon: Icon, hint }) {
   );
 }
 
-/* Painel Admin — visão de métricas de uso real do produto (usuários,
-   treinos, conexões) e de uso da API do Strava contra os limites de taxa
-   deles. Métricas de infraestrutura (banda, tamanho do banco, invocações
-   de Edge Function) não são reconstruídas aqui — o Supabase e a Vercel já
-   têm dashboards próprios e mais completos pra isso; a seção final desta
-   página só linka pra eles. */
+function pctChange(current, previous) {
+  if (previous === 0) return current > 0 ? 100 : 0;
+  return ((current - previous) / previous) * 100;
+}
+
+function ComparisonRow({ label, current, previous, currentLabel, previousLabel }) {
+  return (
+    <div className="flex items-center justify-between py-2" style={{ borderBottom: `1px solid ${C.borderSoft}` }}>
+      <span style={{ color: C.white, fontSize: 13 }}>{label}</span>
+      <div className="flex items-center gap-3">
+        <span style={{ color: C.gray, fontSize: 12 }}>{currentLabel}: <b style={{ color: C.white }}>{current}</b></span>
+        <span style={{ color: C.gray, fontSize: 11 }}>({previousLabel}: {previous})</span>
+        <DeltaBadge value={pctChange(current, previous)} />
+      </div>
+    </div>
+  );
+}
+
 export function AdminPage() {
+  const [excludeTest, setExcludeTest] = useState(true);
   const [overview, setOverview] = useState(null);
   const [daily, setDaily] = useState([]);
+  const [logins, setLogins] = useState([]);
+  const [comparisons, setComparisons] = useState(null);
   const [stravaUsage, setStravaUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -35,13 +53,17 @@ export function AdminPage() {
       setLoading(true);
       setError("");
       try {
-        const [ov, act, strava] = await Promise.all([
-          getAdminOverview(),
-          getAdminDailyActivity(30),
+        const [ov, act, log, comp, strava] = await Promise.all([
+          getAdminOverview(excludeTest),
+          getAdminDailyActivity(30, excludeTest),
+          getAdminDailyLogins(30, excludeTest),
+          getAdminComparisons(excludeTest),
           getAdminStravaApiUsage(),
         ]);
         setOverview(ov);
         setDaily(act.map((d) => ({ ...d, label: d.day.slice(5) })));
+        setLogins(log.map((d) => ({ ...d, label: d.day.slice(5) })));
+        setComparisons(comp);
         setStravaUsage(strava);
       } catch (err) {
         setError(err.message === "NOT_ADMIN" ? "Acesso restrito a administradores." : "Não foi possível carregar as métricas.");
@@ -49,7 +71,7 @@ export function AdminPage() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [excludeTest]);
 
   if (loading) {
     return (
@@ -70,8 +92,28 @@ export function AdminPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between rounded-xl px-4 py-3" style={{ background: C.surface2, border: `1px solid ${C.borderSoft}` }}>
+        <div className="flex items-center gap-2" style={{ color: C.white, fontSize: 13, fontWeight: 600 }}>
+          <FlaskConical size={15} style={{ color: C.gray }} />
+          Excluir usuários teste das métricas
+          {overview.testUsersCount > 0 && (
+            <span style={{ color: C.gray, fontWeight: 400 }}>({overview.testUsersCount} marcado(s))</span>
+          )}
+        </div>
+        <button
+          onClick={() => setExcludeTest((v) => !v)}
+          className="relative rounded-full transition-colors"
+          style={{ width: 40, height: 22, background: excludeTest ? C.positive : C.border }}
+        >
+          <span
+            className="absolute rounded-full transition-transform"
+            style={{ width: 18, height: 18, top: 2, left: 2, background: "#fff", transform: excludeTest ? "translateX(18px)" : "none" }}
+          />
+        </button>
+      </div>
+
       <Card>
-        <CardHeader title="Visão geral" description="Métricas de uso do produto — todos os usuários." />
+        <CardHeader title="Visão geral" description="Métricas de uso do produto." />
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <StatBlock icon={Users} label="Usuários totais" value={overview.totalUsers} />
           <StatBlock icon={Users} label="Novos (7d)" value={overview.newUsers7d} />
@@ -83,19 +125,48 @@ export function AdminPage() {
       </Card>
 
       <Card>
-        <CardHeader title="Atividade diária" description="Treinos criados por dia, últimos 30 dias — todas as modalidades." />
-        <div style={{ width: "100%", height: 220 }}>
-          <ResponsiveContainer>
-            <LineChart data={daily} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.borderSoft} />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.gray }} axisLine={{ stroke: C.border }} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: C.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <Tooltip contentStyle={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} />
-              <Line type="monotone" dataKey="count" name="Treinos" stroke="#00AEEF" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+        <CardHeader title="Comparativos" description="Hoje vs. ontem, essa semana vs. semana passada." />
+        <div className="flex flex-col">
+          <ComparisonRow label="Treinos criados hoje" current={comparisons.workoutsToday} previous={comparisons.workoutsYesterday} currentLabel="hoje" previousLabel="ontem" />
+          <ComparisonRow label="Treinos criados essa semana" current={comparisons.workoutsThisWeek} previous={comparisons.workoutsLastWeek} currentLabel="essa sem." previousLabel="sem. passada" />
+          <ComparisonRow label="Logins hoje" current={comparisons.loginsToday} previous={comparisons.loginsYesterday} currentLabel="hoje" previousLabel="ontem" />
+          <ComparisonRow label="Logins essa semana" current={comparisons.loginsThisWeek} previous={comparisons.loginsLastWeek} currentLabel="essa sem." previousLabel="sem. passada" />
+          <ComparisonRow label="Novos usuários hoje" current={comparisons.newUsersToday} previous={comparisons.newUsersYesterday} currentLabel="hoje" previousLabel="ontem" />
+          <ComparisonRow label="Chamadas à API do Strava hoje" current={comparisons.stravaCallsToday} previous={comparisons.stravaCallsYesterday} currentLabel="hoje" previousLabel="ontem" />
         </div>
       </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <Card>
+          <CardHeader title="Atividade diária" description="Treinos criados por dia, últimos 30 dias." right={<TrendingUp size={16} style={{ color: C.gray }} />} />
+          <div style={{ width: "100%", height: 200 }}>
+            <ResponsiveContainer>
+              <LineChart data={daily} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.borderSoft} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.gray }} axisLine={{ stroke: C.border }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: C.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip contentStyle={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} />
+                <Line type="monotone" dataKey="count" name="Treinos" stroke="#00AEEF" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Logins diários" description="Últimos 30 dias." right={<LogIn size={16} style={{ color: C.gray }} />} />
+          <div style={{ width: "100%", height: 200 }}>
+            <ResponsiveContainer>
+              <LineChart data={logins} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.borderSoft} />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: C.gray }} axisLine={{ stroke: C.border }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: C.gray }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip contentStyle={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12 }} />
+                <Line type="monotone" dataKey="count" name="Logins" stroke="#8B5CF6" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card>
