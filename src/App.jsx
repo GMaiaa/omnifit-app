@@ -25,6 +25,8 @@ import { ProfilePage } from "./profile/ProfilePage";
 import { useUserProfile } from "./profile/useUserProfile";
 import { UploadPage } from "./upload/UploadPage";
 import { Vo2MaxPage } from "./modules/vo2max/Vo2MaxPage";
+import { AdminPage } from "./admin/AdminPage";
+import { isCurrentUserAdmin } from "./admin/adminService";
 
 const MODALITY_ICONS = { Footprints, Dumbbell, Bike, Waves, Flame };
 
@@ -43,6 +45,7 @@ export default function OmnifitApp() {
   const [recordMenuOpen, setRecordMenuOpen] = useState(false);
   const recordMenuRef = useRef(null);
   const [pendingRecordTarget, setPendingRecordTarget] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const running = useWorkouts();
   const strengthTemplates = useTemplates();
   const strengthSessions = useSessions();
@@ -53,6 +56,11 @@ export default function OmnifitApp() {
   const userProfile = useUserProfile();
 
   const { user, signOut } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    isCurrentUserAdmin().then(setIsAdmin);
+  }, [user]);
   const initials = (user?.email?.[0] ?? "U").toUpperCase();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
@@ -228,6 +236,19 @@ export default function OmnifitApp() {
           VO2 Máx
         </button>
 
+        {isAdmin && (
+          <button
+            onClick={() => { setTab("admin"); setActivityOpen(false); }}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-full"
+            style={{
+              color: tab === "admin" ? "#A78BFA" : C.gray,
+              background: tab === "admin" ? "#A78BFA1A" : "transparent",
+            }}
+          >
+            Admin
+          </button>
+        )}
+
         <button
           onClick={() => setActivityOpen((v) => !v)}
           className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-full"
@@ -275,6 +296,8 @@ export default function OmnifitApp() {
           />
         ) : tab === "vo2max" ? (
           <Vo2MaxPage workouts={running.workouts} />
+        ) : tab === "admin" ? (
+          isAdmin ? <AdminPage /> : null
         ) : tab === "corrida" ? (
           <RunningModule {...running} startWithFormOpen={pendingRecordTarget === "corrida"} />
         ) : tab === "musculacao" ? (
