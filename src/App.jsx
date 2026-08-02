@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ChevronDown, Dumbbell, Bike, Waves, Flame, FlaskConical, Footprints, Lock, LogOut, Moon, Plus, Settings, Sun, User as UserIcon,
+  ChevronDown, Dumbbell, Bike, Waves, Flame, FlaskConical, Footprints, Lock, LogOut, Moon, Plus, Settings, ShieldCheck, Sun, User as UserIcon,
 } from "lucide-react";
 import { BRAND_GRADIENT, C, MODALITIES } from "./lib/theme";
 import { applyTheme, getInitialTheme } from "./lib/themeMode";
@@ -189,6 +189,16 @@ export default function OmnifitApp() {
                   <UserIcon size={16} /> Meu perfil
                 </button>
 
+                {isAdmin && (
+                  <button
+                    onClick={() => { setTab("admin"); setProfileMenuOpen(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl"
+                    style={{ color: tab === "admin" ? "#A78BFA" : C.white }}
+                  >
+                    <ShieldCheck size={16} /> Admin
+                  </button>
+                )}
+
                 <button
                   onClick={handleToggleTestStatus}
                   className="w-full flex items-center justify-between gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl"
@@ -264,19 +274,6 @@ export default function OmnifitApp() {
         >
           VO2 Máx
         </button>
-
-        {isAdmin && (
-          <button
-            onClick={() => { setTab("admin"); setActivityOpen(false); }}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-full"
-            style={{
-              color: tab === "admin" ? "#A78BFA" : C.gray,
-              background: tab === "admin" ? "#A78BFA1A" : "transparent",
-            }}
-          >
-            Admin
-          </button>
-        )}
 
         <button
           onClick={() => setActivityOpen((v) => !v)}
