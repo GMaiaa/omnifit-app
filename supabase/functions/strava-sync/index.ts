@@ -20,6 +20,17 @@ function paceSecKm(distanceKm: number, durationSec: number) {
 const PER_PAGE = 100;
 const MAX_PAGES = 20;
 
+/* Registra uma chamada à API do Strava, pra acompanhar uso contra os
+   limites de taxa deles (200/15min, 2000/dia) na aba Admin. Nunca lança
+   erro — um log falho não pode derrubar a sincronização em si. */
+async function logApiCall(admin: ReturnType<typeof supabaseAdmin>, endpoint: string, statusCode: number, userId: string) {
+  try {
+    await admin.from("api_call_logs").insert({ provider: "strava", endpoint, status_code: statusCode, user_id: userId });
+  } catch {
+    // não crítico — segue o fluxo normalmente
+  }
+}
+
 async function getValidAccessToken(admin: ReturnType<typeof supabaseAdmin>, userId: string) {
   const { data: conn, error } = await admin
     .from("strava_connections")
@@ -48,8 +59,10 @@ async function getValidAccessToken(admin: ReturnType<typeof supabaseAdmin>, user
 
   if (!refreshRes.ok) {
     console.error("[strava-sync] refresh falhou:", refreshRes.status, await refreshRes.text());
+    await logApiCall(admin, "oauth/token(refresh)", refreshRes.status, userId);
     throw new Error("STRAVA_REFRESH_FAILED");
   }
+  await logApiCall(admin, "oauth/token(refresh)", refreshRes.status, userId);
 
   const refreshed = await refreshRes.json();
   await admin.from("strava_connections").update({
@@ -65,7 +78,7 @@ async function getValidAccessToken(admin: ReturnType<typeof supabaseAdmin>, user
    (segundos desde epoch). Sem esse parâmetro, busca o histórico inteiro
    até o teto de segurança. Paginação para quando a API devolve uma
    página incompleta. */
-async function fetchActivities(accessToken: string, afterUnix?: number) {
+async function fetchActivities(accessToken: string, admin: ReturnType<typeof supabaseAdmin>, userId: string, afterUnix?: number) {
   const all = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
     const params = new URLSearchParams({ per_page: String(PER_PAGE), page: String(page) });
@@ -75,6 +88,7 @@ async function fetchActivities(accessToken: string, afterUnix?: number) {
       `https://www.strava.com/api/v3/athlete/activities?${params.toString()}`,
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
+    await logApiCall(admin, "athlete/activities", res.status, userId);
     if (!res.ok) {
       const bodyText = await res.text();
       console.error("[strava-sync] busca de atividades falhou na página", page, res.status, bodyText);
@@ -105,7 +119,7 @@ Deno.serve(async (req) => {
       // corpo vazio é normal (sync sem filtro de data) — ignora
     }
 
-    const activities = await fetchActivities(accessToken, afterUnix);
+    const activities = await fetchActivities(accessToken, admin, user.id, afterUnix);
 
     const isValid = (a: { distance: number; moving_time: number }) => a.distance > 0 && a.moving_time > 0;
 
