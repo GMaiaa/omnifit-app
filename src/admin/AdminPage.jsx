@@ -1,11 +1,16 @@
 import { useEffect, useState } from "react";
-import { Users, Activity, TrendingUp, Zap, Bike, ExternalLink, Loader2, AlertTriangle, LogIn, FlaskConical } from "lucide-react";
+import {
+  Users, Activity, TrendingUp, Zap, Bike, ExternalLink, Loader2, AlertTriangle,
+  LogIn, FlaskConical, Trash2, Mail,
+} from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { C } from "../lib/theme";
 import { Card, CardHeader, DeltaBadge } from "../components/ui";
+import { fmtDateShort } from "../lib/format";
 import {
   getAdminOverview, getAdminDailyActivity, getAdminDailyLogins,
   getAdminComparisons, getAdminStravaApiUsage,
+  getAdminUsers, setUserTestStatus, deleteUserAccount,
 } from "./adminService";
 
 function StatBlock({ label, value, icon: Icon, hint }) {
@@ -38,6 +43,75 @@ function ComparisonRow({ label, current, previous, currentLabel, previousLabel }
   );
 }
 
+function UserRow({ u, onToggleTest, onDelete }) {
+  const [busy, setBusy] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  async function handleToggle() {
+    setBusy(true);
+    try {
+      await onToggleTest(u.id, !u.isTest);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteClick() {
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
+    setBusy(true);
+    try {
+      await onDelete(u.id);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5 flex-wrap" style={{ borderBottom: `1px solid ${C.borderSoft}` }}>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5" style={{ color: C.white, fontSize: 13, fontWeight: 600 }}>
+          <Mail size={12} style={{ color: C.gray }} />
+          <span className="truncate">{u.email ?? "(sem e-mail)"}</span>
+          {u.isTest && (
+            <span className="flex-shrink-0 rounded-full px-2 py-0.5" style={{ background: `${C.gray}33`, color: C.gray, fontSize: 10 }}>teste</span>
+          )}
+        </div>
+        <div style={{ color: C.gray, fontSize: 11 }} className="mt-0.5">
+          Desde {fmtDateShort(u.createdAt)} · {u.workoutCount} treino(s) · {u.loginCount} login(s)
+          {u.lastLoginAt && ` · último login ${fmtDateShort(u.lastLoginAt)}`}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <button
+          onClick={handleToggle}
+          disabled={busy}
+          className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+          style={{
+            background: u.isTest ? `${C.positive}22` : C.surface2,
+            color: u.isTest ? C.positive : C.gray,
+            border: `1px solid ${u.isTest ? C.positive : C.border}`,
+          }}
+        >
+          {u.isTest ? "Desmarcar teste" : "Marcar como teste"}
+        </button>
+        <button
+          onClick={handleDeleteClick}
+          disabled={busy}
+          className="rounded-full p-1.5 disabled:opacity-50 flex items-center gap-1"
+          style={{ color: confirmingDelete ? "#fff" : C.danger, background: confirmingDelete ? C.danger : "transparent", border: `1px solid ${C.danger}` }}
+          title={confirmingDelete ? "Clique de novo pra confirmar" : "Excluir conta"}
+        >
+          <Trash2 size={13} />
+          {confirmingDelete && <span className="text-xs font-semibold pr-1">Confirmar?</span>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function AdminPage() {
   const [excludeTest, setExcludeTest] = useState(true);
   const [overview, setOverview] = useState(null);
@@ -45,6 +119,8 @@ export function AdminPage() {
   const [logins, setLogins] = useState([]);
   const [comparisons, setComparisons] = useState(null);
   const [stravaUsage, setStravaUsage] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [usersError, setUsersError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -53,18 +129,20 @@ export function AdminPage() {
       setLoading(true);
       setError("");
       try {
-        const [ov, act, log, comp, strava] = await Promise.all([
+        const [ov, act, log, comp, strava, userList] = await Promise.all([
           getAdminOverview(excludeTest),
           getAdminDailyActivity(30, excludeTest),
           getAdminDailyLogins(30, excludeTest),
           getAdminComparisons(excludeTest),
           getAdminStravaApiUsage(),
+          getAdminUsers(),
         ]);
         setOverview(ov);
         setDaily(act.map((d) => ({ ...d, label: d.day.slice(5) })));
         setLogins(log.map((d) => ({ ...d, label: d.day.slice(5) })));
         setComparisons(comp);
         setStravaUsage(strava);
+        setUsers(userList);
       } catch (err) {
         setError(err.message === "NOT_ADMIN" ? "Acesso restrito a administradores." : "Não foi possível carregar as métricas.");
       } finally {
@@ -72,6 +150,29 @@ export function AdminPage() {
       }
     })();
   }, [excludeTest]);
+
+  async function handleToggleUserTest(userId, markAsTest) {
+    setUsersError("");
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, isTest: markAsTest } : u)));
+    try {
+      await setUserTestStatus(userId, markAsTest);
+    } catch {
+      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, isTest: !markAsTest } : u)));
+      setUsersError("Não foi possível atualizar. Tente de novo.");
+    }
+  }
+
+  async function handleDeleteUser(userId) {
+    setUsersError("");
+    const prev = users;
+    setUsers((current) => current.filter((u) => u.id !== userId));
+    try {
+      await deleteUserAccount(userId);
+    } catch (err) {
+      setUsers(prev);
+      setUsersError(err.message === "CANNOT_DELETE_SELF" ? "Você não pode excluir a própria conta por aqui." : "Não foi possível excluir essa conta.");
+    }
+  }
 
   if (loading) {
     return (
@@ -214,6 +315,16 @@ export function AdminPage() {
           <StatBlock icon={Zap} label="Hoje" value={`${stravaUsage.callsToday}/2000`} />
           <StatBlock icon={AlertTriangle} label="Erros (24h)" value={stravaUsage.errorsLast24h} />
         </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Usuários" description="Marque contas de teste ou exclua contas permanentemente." />
+        <div className="flex flex-col max-h-96 overflow-y-auto">
+          {users.map((u) => (
+            <UserRow key={u.id} u={u} onToggleTest={handleToggleUserTest} onDelete={handleDeleteUser} />
+          ))}
+        </div>
+        {usersError && <div className="mt-3 text-xs" style={{ color: C.danger }}>{usersError}</div>}
       </Card>
 
       <Card>

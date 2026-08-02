@@ -58,3 +58,40 @@ export async function getAdminStravaApiUsage() {
   if (error) throw error;
   return data;
 }
+
+/* Lista usuários com e-mail, quando criaram a conta, quantos treinos e
+   logins têm, e se já estão marcados como teste. */
+export async function getAdminUsers(limit = 200) {
+  const { data, error } = await supabase.rpc("admin_list_users", { result_limit: limit });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    id: row.user_id,
+    email: row.email,
+    createdAt: row.created_at,
+    isTest: row.is_test,
+    workoutCount: Number(row.workout_count),
+    loginCount: Number(row.login_count),
+    lastLoginAt: row.last_login_at,
+  }));
+}
+
+/* Marca/desmarca QUALQUER usuário como teste (diferente de
+   setMyTestStatus, que só mexe na própria conta do chamador). */
+export async function setUserTestStatus(targetUserId, markAsTest) {
+  const { error } = await supabase.rpc("admin_set_user_test_status", {
+    target_user_id: targetUserId,
+    mark_as_test: markAsTest,
+  });
+  if (error) throw error;
+}
+
+/* Exclui permanentemente a conta de um usuário. Ação sem volta — a
+   confirmação já deve ter acontecido na UI antes de chamar isso. */
+export async function deleteUserAccount(targetUserId) {
+  const { data, error } = await supabase.functions.invoke("admin-delete-user", {
+    body: { targetUserId },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
