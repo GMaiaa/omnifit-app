@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ChevronDown, Dumbbell, Bike, Waves, Flame, Footprints, Lock, LogOut, Moon, Plus, Settings, Sun, User as UserIcon,
+  CalendarDays, ChevronDown, Dumbbell, Bike, Waves, Flame, Footprints, Lock, LogOut, Moon, Plus, Settings, Sun, User as UserIcon,
 } from "lucide-react";
 import { BRAND_GRADIENT, C, MODALITIES } from "./lib/theme";
 import { applyTheme, getInitialTheme } from "./lib/themeMode";
@@ -21,6 +21,7 @@ import { useHyroxTemplates } from "./modules/hyrox/useHyroxTemplates";
 import { useHyroxSessions } from "./modules/hyrox/useHyroxSessions";
 import { CiclismoModule } from "./modules/ciclismo/CiclismoModule";
 import { useCyclingWorkouts } from "./modules/ciclismo/useCyclingWorkouts";
+import { CalendarModule } from "./calendar/CalendarModule";
 import { ProfilePage } from "./profile/ProfilePage";
 import { useUserProfile } from "./profile/useUserProfile";
 import { UploadPage } from "./upload/UploadPage";
@@ -229,6 +230,17 @@ export default function OmnifitApp() {
         </button>
 
         <button
+          onClick={() => { setTab("calendario"); setActivityOpen(false); }}
+          className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-full"
+          style={{
+            color: tab === "calendario" ? C.positive : C.gray,
+            background: tab === "calendario" ? `color-mix(in srgb, ${C.positive} 10%, transparent)` : "transparent",
+          }}
+        >
+          <CalendarDays size={15} /> Calendário
+        </button>
+
+        <button
           onClick={() => setActivityOpen((v) => !v)}
           className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-full"
           style={{
@@ -275,6 +287,8 @@ export default function OmnifitApp() {
           />
         ) : tab === "vo2max" ? (
           <Vo2MaxPage workouts={running.workouts} />
+        ) : tab === "calendario" ? (
+          <CalendarModule />
         ) : tab === "corrida" ? (
           <RunningModule {...running} startWithFormOpen={pendingRecordTarget === "corrida"} />
         ) : tab === "musculacao" ? (
