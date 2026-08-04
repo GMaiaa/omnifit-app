@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { logLoginEvent } from "../lib/loginTracking";
 
 const AuthContext = createContext(undefined);
 
@@ -20,10 +21,13 @@ export function AuthProvider({ children }) {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!active) return;
       setSession(nextSession);
       setLoading(false);
+      if (event === "SIGNED_IN" && nextSession?.user?.id) {
+        logLoginEvent(nextSession.user.id);
+      }
     });
 
     return () => {

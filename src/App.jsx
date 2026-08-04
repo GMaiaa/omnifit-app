@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  CalendarDays, ChevronDown, Dumbbell, Bike, Waves, Flame, Footprints, Lock, LogOut, Moon, Plus, Settings, Sun, User as UserIcon,
+  CalendarDays, ChevronDown, Dumbbell, Bike, Waves, Flame, FlaskConical, Footprints, Lock, LogOut, Moon, Plus, Settings, ShieldCheck, Sun, User as UserIcon,
 } from "lucide-react";
 import { BRAND_GRADIENT, C, MODALITIES } from "./lib/theme";
 import { applyTheme, getInitialTheme } from "./lib/themeMode";
@@ -26,6 +26,8 @@ import { ProfilePage } from "./profile/ProfilePage";
 import { useUserProfile } from "./profile/useUserProfile";
 import { UploadPage } from "./upload/UploadPage";
 import { Vo2MaxPage } from "./modules/vo2max/Vo2MaxPage";
+import { AdminPage } from "./admin/AdminPage";
+import { isCurrentUserAdmin, isCurrentUserTest, setMyTestStatus } from "./admin/adminService";
 
 const MODALITY_ICONS = { Footprints, Dumbbell, Bike, Waves, Flame };
 
@@ -44,6 +46,8 @@ export default function OmnifitApp() {
   const [recordMenuOpen, setRecordMenuOpen] = useState(false);
   const recordMenuRef = useRef(null);
   const [pendingRecordTarget, setPendingRecordTarget] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isTestUser, setIsTestUser] = useState(false);
   const running = useWorkouts();
   const strengthTemplates = useTemplates();
   const strengthSessions = useSessions();
@@ -54,6 +58,22 @@ export default function OmnifitApp() {
   const userProfile = useUserProfile();
 
   const { user, signOut } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    isCurrentUserAdmin().then(setIsAdmin);
+    isCurrentUserTest().then(setIsTestUser);
+  }, [user]);
+
+  async function handleToggleTestStatus() {
+    const next = !isTestUser;
+    setIsTestUser(next);
+    try {
+      await setMyTestStatus(next);
+    } catch {
+      setIsTestUser(!next);
+    }
+  }
   const initials = (user?.email?.[0] ?? "U").toUpperCase();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
@@ -168,6 +188,33 @@ export default function OmnifitApp() {
                   style={{ color: C.white }}
                 >
                   <UserIcon size={16} /> Meu perfil
+                </button>
+
+                {isAdmin && (
+                  <button
+                    onClick={() => { setTab("admin"); setProfileMenuOpen(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl"
+                    style={{ color: tab === "admin" ? "#A78BFA" : C.white }}
+                  >
+                    <ShieldCheck size={16} /> Admin
+                  </button>
+                )}
+
+                <button
+                  onClick={handleToggleTestStatus}
+                  className="w-full flex items-center justify-between gap-2.5 px-3 py-2.5 text-sm font-semibold rounded-xl"
+                  style={{ color: C.white }}
+                >
+                  <span className="flex items-center gap-2.5"><FlaskConical size={16} /> Teste</span>
+                  <span
+                    className="relative rounded-full flex-shrink-0"
+                    style={{ width: 32, height: 18, background: isTestUser ? C.positive : C.border }}
+                  >
+                    <span
+                      className="absolute rounded-full transition-transform"
+                      style={{ width: 14, height: 14, top: 2, left: 2, background: "#fff", transform: isTestUser ? "translateX(14px)" : "none" }}
+                    />
+                  </span>
                 </button>
 
                 <div
@@ -289,6 +336,8 @@ export default function OmnifitApp() {
           <Vo2MaxPage workouts={running.workouts} />
         ) : tab === "calendario" ? (
           <CalendarModule />
+        ) : tab === "admin" ? (
+          isAdmin ? <AdminPage /> : null
         ) : tab === "corrida" ? (
           <RunningModule {...running} startWithFormOpen={pendingRecordTarget === "corrida"} />
         ) : tab === "musculacao" ? (
