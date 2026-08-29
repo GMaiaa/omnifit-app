@@ -1,50 +1,46 @@
 import { useCallback, useEffect, useState } from "react";
-import { STORAGE_KEY_TEMPLATES } from "./constants";
+import { getHyroxTemplates, mapHyroxError } from "./hyroxService";
 
-/* Loads/persists HYROX templates ("fichas") via window.storage — same shape
-   of hook as strength/useTemplates.js. Templates only ever hold structure
-   (block list/order/rounds), never actual reps/carga/tempo registrados —
-   those live on Sessions instead (see useHyroxSessions.js). */
+/* Busca as fichas reais de public.hyrox_templates. Mesmo padrão de
+   strength/useTemplates.js: leitura, criação, edição e exclusão já são o
+   banco de verdade — addTemplate/updateTemplate/deleteTemplate só refletem
+   no estado local o que o caller já confirmou com hyroxService.js. */
 export function useHyroxTemplates() {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [saveError, setSaveError] = useState("");
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await window.storage.get(STORAGE_KEY_TEMPLATES, false);
-        setTemplates(res ? JSON.parse(res.value) : []);
-      } catch {
-        setTemplates([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const persist = useCallback(async (next) => {
-    setTemplates(next);
+  const fetchTemplates = useCallback(async () => {
+    setLoading(true);
+    setError("");
     try {
-      const res = await window.storage.set(STORAGE_KEY_TEMPLATES, JSON.stringify(next), false);
-      if (!res) setSaveError("Não foi possível salvar. Tente novamente.");
-      else setSaveError("");
-    } catch {
-      setSaveError("Não foi possível salvar. Tente novamente.");
+      const rows = await getHyroxTemplates();
+      setTemplates(rows);
+    } catch (err) {
+      setError(mapHyroxError(err, "Não foi possível carregar seus treinos. Tente novamente."));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
+  useEffect(() => {
+    fetchTemplates();
+  }, [fetchTemplates]);
+
+  /* Inclusão direta no estado compartilhado após um cadastro bem-sucedido —
+     evita uma segunda consulta ao Supabase. Usa o registro retornado pelo
+     insert (id/created_at/updated_at reais) e deduplica por id. */
   const addTemplate = useCallback((t) => {
-    persist([t, ...templates]);
-  }, [templates, persist]);
+    setTemplates((prev) => (prev.some((existing) => existing.id === t.id) ? prev : [t, ...prev]));
+  }, []);
 
   const updateTemplate = useCallback((id, patch) => {
-    persist(templates.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t)));
-  }, [templates, persist]);
+    setTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  }, []);
 
   const deleteTemplate = useCallback((id) => {
-    persist(templates.filter((t) => t.id !== id));
-  }, [templates, persist]);
+    setTemplates((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
-  return { templates, loading, saveError, addTemplate, updateTemplate, deleteTemplate };
+  return { templates, loading, error, addTemplate, updateTemplate, deleteTemplate, refetch: fetchTemplates };
 }
