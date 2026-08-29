@@ -25,17 +25,49 @@ const SUB_NAV = [
 
 const FREE_TEMPLATE = { id: null, name: "Treino Livre", focus: "metcon", blocks: [] };
 
+/* Reconstrói os blocos (circuitos) de uma ficha a partir do histórico plano
+   de execuções de uma sessão (session.blocks — um cartão por volta de cada
+   exercício, ver HyroxRunner.jsx). Reagrupa por groupId (o bloco de origem
+   na ficha, ou um id próprio pra cada exercício avulso do Treino Livre),
+   preservando a ordem de primeira aparição de cada exercício dentro do
+   grupo e usando a maior volta vista como número de voltas do bloco. */
 function buildTemplateBlocksFromSession(blocks) {
-  return blocks.map((b, i) => ({
-    id: uid(),
-    catalogId: b.sourceExerciseId,
-    name: b.name,
-    category: b.category,
-    metricType: b.metricType,
-    notes: b.notes || "",
-    order: i,
-    rounds: b.sets.filter((s) => s.status !== "skipped").length || DEFAULT_ROUNDS,
-  }));
+  const groupsByGid = new Map();
+  const groupOrder = [];
+
+  for (const b of blocks) {
+    const gid = b.groupId || b.id;
+    if (!groupsByGid.has(gid)) {
+      groupOrder.push(gid);
+      groupsByGid.set(gid, { rounds: 0, exercisesByKey: new Map(), exerciseOrder: [] });
+    }
+    const group = groupsByGid.get(gid);
+    group.rounds = Math.max(group.rounds, b.round || 1);
+
+    const key = b.sourceExerciseId || b.name;
+    if (!group.exercisesByKey.has(key)) {
+      group.exercisesByKey.set(key, {
+        id: uid(),
+        catalogId: b.sourceExerciseId,
+        name: b.name,
+        category: b.category,
+        metricType: b.metricType,
+        notes: b.notes || "",
+        target: b.target || null,
+      });
+      group.exerciseOrder.push(key);
+    }
+  }
+
+  return groupOrder.map((gid, i) => {
+    const group = groupsByGid.get(gid);
+    return {
+      id: uid(),
+      order: i,
+      rounds: group.rounds || DEFAULT_ROUNDS,
+      exercises: group.exerciseOrder.map((key, j) => ({ ...group.exercisesByKey.get(key), order: j })),
+    };
+  });
 }
 
 export function HyroxModule({ templates, sessions }) {
@@ -136,7 +168,10 @@ export function HyroxModule({ templates, sessions }) {
       }
     }
 
-    setSummary({ durationSec: createdSession.durationSec, blocks: createdSession.blocks.length });
+    setSummary({
+      durationSec: createdSession.durationSec,
+      blocks: new Set(createdSession.blocks.map((b) => b.groupId || b.id)).size,
+    });
     setActiveSession(null);
     setTimeout(() => setSummary(null), 6000);
   }

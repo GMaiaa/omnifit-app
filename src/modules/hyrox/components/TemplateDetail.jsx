@@ -4,7 +4,7 @@ import { ArrowLeft, Pencil, Play, Trash2 } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtDateShort, fmtDuration, fmtPace } from "../../../lib/format";
 import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
-import { categoryInfo, focusInfo } from "../constants";
+import { categoryInfo, focusInfo, formatTargetValue } from "../constants";
 import { exerciseHistory } from "../analytics";
 import { Card, CardHeader, Pill, Select } from "../../../components/ui";
 
@@ -25,10 +25,11 @@ export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, 
     [sessions, template.id]
   );
 
+  const allExercises = useMemo(() => template.blocks.flatMap((b) => b.exercises), [template.blocks]);
   const [exerciseKey, setExerciseKey] = useState(
-    template.blocks[0]?.catalogId || template.blocks[0]?.name || null
+    allExercises[0]?.catalogId || allExercises[0]?.name || null
   );
-  const activeBlock = template.blocks.find((b) => (b.catalogId || b.name) === exerciseKey);
+  const activeBlock = allExercises.find((e) => (e.catalogId || e.name) === exerciseKey);
   const history = useMemo(
     () => (exerciseKey ? exerciseHistory(sessions, exerciseKey) : []),
     [sessions, exerciseKey]
@@ -64,16 +65,30 @@ export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, 
 
         <Card>
           <CardHeader title="Blocos" description={`${template.blocks.length} blocos nesta ficha · ${focusInfo(template.focus).label}`} />
-          <div className="flex flex-col gap-2">
-            {template.blocks.slice().sort((a, b) => a.order - b.order).map((b, i) => {
-              const category = categoryInfo(b.category);
-              return (
-                <div key={b.id} className="flex items-center justify-between text-sm">
-                  <span style={{ color: C.white }}>Bloco {i + 1} — {b.name}{b.rounds > 1 ? ` (${b.rounds}x)` : ""}</span>
-                  <Pill color={category.color}>{category.label}</Pill>
+          <div className="flex flex-col gap-3">
+            {template.blocks.slice().sort((a, b) => a.order - b.order).map((b, i) => (
+              <div key={b.id}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-semibold" style={{ color: C.white }}>Bloco {i + 1}</span>
+                  {b.rounds > 1 && <span className="text-xs" style={{ color: C.gray }}>{b.rounds} voltas</span>}
                 </div>
-              );
-            })}
+                <div className="flex flex-col gap-1.5">
+                  {b.exercises.slice().sort((x, y) => (x.order ?? 0) - (y.order ?? 0)).map((e) => {
+                    const category = categoryInfo(e.category);
+                    const targetLabel = formatTargetValue(e.target);
+                    return (
+                      <div key={e.id} className="flex items-center justify-between text-sm pl-2">
+                        <span style={{ color: C.white }}>
+                          {e.name}
+                          {targetLabel && <span style={{ color: C.gray }}> — meta {targetLabel}</span>}
+                        </span>
+                        <Pill color={category.color}>{category.label}</Pill>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
 
@@ -85,7 +100,7 @@ export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, 
               <Select
                 value={exerciseKey}
                 onChange={setExerciseKey}
-                options={template.blocks.map((b) => ({ value: b.catalogId || b.name, label: b.name }))}
+                options={allExercises.map((e) => ({ value: e.catalogId || e.name, label: e.name }))}
               />
             }
           />
@@ -133,7 +148,7 @@ export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, 
                   <div className="flex-1 flex items-center gap-3 text-sm flex-wrap" style={{ color: C.white }}>
                     <span>{fmtDuration(s.durationSec)}</span>
                     <span style={{ color: C.gray }}>•</span>
-                    <span>{s.blocks.length} blocos</span>
+                    <span>{new Set(s.blocks.map((b) => b.groupId || b.id)).size} blocos</span>
                   </div>
                 </div>
               ))}

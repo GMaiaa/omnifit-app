@@ -1,4 +1,5 @@
 import { modalityInfo } from "../../lib/theme";
+import { fmtDuration } from "../../lib/format";
 
 const hyroxColor = modalityInfo("hyrox").color;
 
@@ -44,6 +45,43 @@ export const focusInfo = (id) => FOCUS.find((f) => f.id === id) || FOCUS[0];
 export const isRaceFocus = (id) => id === "simulado" || id === "prova";
 
 export const DEFAULT_ROUNDS = 1;
+
+/* Tipos de meta ("target") planejável por exercício dentro de uma ficha —
+   dimensão independente de METRIC_TYPES: a meta é só uma referência definida
+   ao montar o treino (ex: "SkiErg — meta 500m"), exibida durante a execução;
+   o que de fato foi feito continua sendo registrado pelos campos de
+   METRIC_TYPES em cada volta. */
+export const TARGET_TYPES = [
+  { id: "reps", label: "Repetições", unit: "reps" },
+  { id: "distance", label: "Distância", unit: "m" },
+  { id: "calories", label: "Calorias", unit: "cal" },
+  { id: "time", label: "Tempo", unit: "s" },
+];
+export const targetTypeInfo = (id) => TARGET_TYPES.find((t) => t.id === id) || TARGET_TYPES[0];
+
+/* Exercícios de peso corporal que fazem sentido tanto por distância quanto
+   por repetições (deslocamento), diferente dos demais (contagem pura). */
+const BODYWEIGHT_DISTANCE_OR_REPS = new Set(["burpees", "burpee-broad-jump", "walking-lunges"]);
+
+/* Quais tipos de meta fazem sentido para um exercício — usado pelo
+   TemplateForm para oferecer só as opções relevantes (ergômetros: distância
+   ou calorias; carga/corrida: distância; isométricos: tempo; alguns de peso
+   corporal: distância ou reps; os demais: reps). Aceita tanto entradas do
+   catálogo quanto customizadas (ambas têm category/metricType/catalogId). */
+export function targetTypesFor({ catalogId, category, metricType } = {}) {
+  if (metricType === "time") return ["time"];
+  if (category === "ergometros") return ["distance", "calories"];
+  if (category === "carga" || category === "corrida") return ["distance"];
+  if (BODYWEIGHT_DISTANCE_OR_REPS.has(catalogId)) return ["distance", "reps"];
+  return ["reps"];
+}
+
+export function formatTargetValue(target) {
+  if (!target || target.value === null || target.value === undefined) return null;
+  if (target.type === "time") return fmtDuration(target.value);
+  const unit = targetTypeInfo(target.type).unit;
+  return `${target.value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} ${unit}`;
+}
 
 /* Catálogo embutido — mesma ideia do EXERCISE_CATALOG da Musculação: mantém
    nomes consistentes entre sessões (histórico/PRs por exercício dependem

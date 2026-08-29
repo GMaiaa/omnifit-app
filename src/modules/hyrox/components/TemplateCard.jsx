@@ -7,7 +7,7 @@ import { Card, Pill } from "../../../components/ui";
 const hyrox = modalityInfo("hyrox");
 
 export function TemplateCard({ template, lastSessionDate, onStart, onEdit, onDelete, onOpenDetail }) {
-  const categories = [...new Set(template.blocks.map((b) => b.category))].map(categoryInfo);
+  const categories = [...new Set(template.blocks.flatMap((b) => b.exercises.map((e) => e.category)))].map(categoryInfo);
   const focus = focusInfo(template.focus);
 
   return (

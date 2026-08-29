@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2, ChevronDown, ChevronUp, Circle, MessageSquare,
   MinusCircle, Play, Plus, Repeat, Square, Timer, Trash2, X,
@@ -6,7 +6,7 @@ import {
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtDuration, todayStr, uid } from "../../../lib/format";
 import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
-import { DEFAULT_ROUNDS, FOCUS, categoryInfo } from "../constants";
+import { DEFAULT_ROUNDS, FOCUS, categoryInfo, formatTargetValue } from "../constants";
 import { hyroxExerciseKeyOf } from "../analytics";
 import { Select } from "../../../components/ui";
 import { ExercisePicker } from "./ExercisePicker";
@@ -41,33 +41,75 @@ function lastExecutionOfExercise(sessions, key) {
   return null;
 }
 
-function blockFromTemplateEntry(tb, sessions) {
-  const key = tb.catalogId || tb.name;
+/* Um "bloco" na ficha é um circuito: um número de voltas compartilhado por
+   todos os exercícios que ele contém, executados em round-robin (volta 1 de
+   cada exercício, depois volta 2 de cada, ...). Cada volta de cada exercício
+   vira seu próprio cartão de execução (mesma UI de sempre — start/finish,
+   registro, notas), marcado com groupId (o bloco de origem) e round (a volta
+   que representa), usados só para agrupar visualmente aqui e para
+   reconstruir a ficha em buildTemplateBlocksFromSession (HyroxModule.jsx). */
+function blockFromGroupExercise(groupId, round, ex, sessions) {
+  const key = ex.catalogId || ex.name;
   const lastBlock = lastExecutionOfExercise(sessions, key);
-  const sets = lastBlock?.sets.length
-    ? lastBlock.sets.filter((s) => s.status !== "skipped").map(cloneRoundForPrefill)
-    : Array.from({ length: tb.rounds || DEFAULT_ROUNDS }, () => emptyRound());
+  const doneSets = lastBlock?.sets.filter((s) => s.status !== "skipped") || [];
+  // Prefill com a mesma posição de volta da última execução (volta 2 puxa a
+  // volta 2 de antes) — cai pra última disponível se o histórico tiver menos
+  // voltas do que a ficha atual pede.
+  const prefillSource = doneSets[round - 1] || doneSets[doneSets.length - 1] || null;
 
   return {
     id: uid(),
-    sourceExerciseId: tb.catalogId || null,
-    name: tb.name,
-    category: tb.category,
-    metricType: tb.metricType,
-    notes: tb.notes || "",
+    groupId,
+    round,
+    sourceExerciseId: ex.catalogId || null,
+    name: ex.name,
+    category: ex.category,
+    metricType: ex.metricType,
+    notes: ex.notes || "",
+    target: ex.target || null,
     startedAt: null, finishedAt: null, durationSec: 0, transitionSec: 0,
-    sets: sets.length ? sets : [emptyRound()],
+    sets: [prefillSource ? cloneRoundForPrefill(prefillSource) : emptyRound()],
   };
+}
+
+function expandTemplateBlocks(templateBlocks, sessions) {
+  const groups = templateBlocks.slice().sort((a, b) => a.order - b.order);
+  const out = [];
+  for (const g of groups) {
+    const exercises = g.exercises.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    for (let r = 1; r <= (g.rounds || DEFAULT_ROUNDS); r++) {
+      for (const ex of exercises) out.push(blockFromGroupExercise(g.id, r, ex, sessions));
+    }
+  }
+  return out;
+}
+
+/* Flattening equivalente ao de cima, só das chaves de exercício, na mesma
+   ordem — usado por structurallyChanged() pra comparar a ficha original
+   (ainda agrupada) com o resultado da execução (já expandido). */
+function flattenTemplateKeys(templateBlocks) {
+  const groups = templateBlocks.slice().sort((a, b) => a.order - b.order);
+  const keys = [];
+  for (const g of groups) {
+    const exercises = g.exercises.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    for (let r = 1; r <= (g.rounds || DEFAULT_ROUNDS); r++) {
+      for (const ex of exercises) keys.push(ex.catalogId || ex.name);
+    }
+  }
+  return keys;
 }
 
 function blockFromPicked(entry) {
   return {
     id: uid(),
+    groupId: uid(),
+    round: 1,
     sourceExerciseId: entry.catalogId || null,
     name: entry.name,
     category: entry.category,
     metricType: entry.metricType,
     notes: "",
+    target: null,
     startedAt: null, finishedAt: null, durationSec: 0, transitionSec: 0,
     sets: [emptyRound()],
   };
@@ -152,12 +194,7 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
   useLockBodyScroll();
   const hasTemplate = !!template.id;
 
-  const [blocks, setBlocks] = useState(() =>
-    template.blocks
-      .slice()
-      .sort((a, b) => a.order - b.order)
-      .map((tb) => blockFromTemplateEntry(tb, sessions))
-  );
+  const [blocks, setBlocks] = useState(() => expandTemplateBlocks(template.blocks, sessions));
   const [focus, setFocus] = useState(template.focus || FOCUS[0].id);
   const [sessionNotes, setSessionNotes] = useState("");
   const [notesOpenIds, setNotesOpenIds] = useState(() => new Set());
@@ -178,6 +215,19 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
 
   const totalRounds = blocks.reduce((a, b) => a + b.sets.length, 0);
   const doneRounds = blocks.reduce((a, b) => a + b.sets.filter((s) => s.status === "done").length, 0);
+
+  /* Numeração/voltas totais de cada bloco (groupId), pra renderizar o
+     cabeçalho "Bloco N" uma vez por circuito e "Volta X/Y" em cada cartão. */
+  const groupMeta = useMemo(() => {
+    const order = [];
+    const totalByGroup = new Map();
+    for (const b of blocks) {
+      if (!totalByGroup.has(b.groupId)) { order.push(b.groupId); totalByGroup.set(b.groupId, 0); }
+      totalByGroup.set(b.groupId, Math.max(totalByGroup.get(b.groupId), b.round || 1));
+    }
+    const indexByGroup = new Map(order.map((gid, i) => [gid, i + 1]));
+    return { indexByGroup, totalByGroup };
+  }, [blocks]);
 
   function updateBlock(id, patch) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
@@ -257,6 +307,7 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
         name: entry.name,
         category: entry.category,
         metricType: entry.metricType,
+        target: null,
         sets: [emptyRound()],
       });
     }
@@ -267,11 +318,14 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
     return blocks
       .map((b, i) => ({
         id: b.id,
+        groupId: b.groupId,
+        round: b.round,
         sourceExerciseId: b.sourceExerciseId,
         name: b.name,
         category: b.category,
         metricType: b.metricType,
         notes: b.notes,
+        target: b.target || null,
         order: i,
         startedAt: b.startedAt,
         finishedAt: b.finishedAt,
@@ -291,7 +345,7 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
 
   function structurallyChanged(finalBlocks) {
     if (!hasTemplate) return false;
-    const originalKeys = template.blocks.slice().sort((a, b) => a.order - b.order).map((tb) => tb.catalogId || tb.name);
+    const originalKeys = flattenTemplateKeys(template.blocks);
     const finalKeys = finalBlocks.map((b) => b.sourceExerciseId || b.name);
     if (originalKeys.length !== finalKeys.length) return true;
     return originalKeys.some((k, i) => k !== finalKeys[i]);
@@ -357,89 +411,102 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
         {blocks.map((b, i) => {
           const category = categoryInfo(b.category);
           const inProgress = !!b.startedAt && !b.finishedAt;
+          const groupNum = groupMeta.indexByGroup.get(b.groupId);
+          const groupRounds = groupMeta.totalByGroup.get(b.groupId);
+          const isNewGroup = i === 0 || blocks[i - 1].groupId !== b.groupId;
+          const targetLabel = formatTargetValue(b.target);
           return (
-            <div key={b.id} className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-              <div className="flex items-start gap-2 mb-3">
-                <div className="flex flex-col mt-0.5">
-                  <button onClick={() => move(b.id, -1)} disabled={i === 0} className="p-0.5 disabled:opacity-20" style={{ color: C.gray }}><ChevronUp size={13} /></button>
-                  <button onClick={() => move(b.id, 1)} disabled={i === blocks.length - 1} className="p-0.5 disabled:opacity-20" style={{ color: C.gray }}><ChevronDown size={13} /></button>
+            <div key={b.id} className="flex flex-col gap-2">
+              {isNewGroup && (
+                <div className="flex items-center gap-2 px-1">
+                  <span className="text-xs font-bold uppercase tracking-wider" style={{ color: hyrox.color }}>Bloco {groupNum}</span>
+                  {groupRounds > 1 && <span className="text-xs" style={{ color: C.gray }}>{groupRounds} voltas</span>}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold" style={{ color: C.white, fontFamily: "'Poppins', sans-serif" }}>
-                    Bloco {i + 1} — {b.name}
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-0.5 text-xs" style={{ color: category.color }}>
-                    {category.label}
-                    {b.finishedAt && <span style={{ color: C.gray }}>• {fmtDuration(b.durationSec)}</span>}
-                    {b.transitionSec > 0 && <span style={{ color: C.amber }}>• transição {fmtDuration(b.transitionSec)}</span>}
-                  </div>
-                </div>
-                <button onClick={() => toggleNotes(b.id)} className="p-1.5 rounded-lg" style={{ color: notesOpenIds.has(b.id) ? hyrox.color : C.gray }}>
-                  <MessageSquare size={14} />
-                </button>
-                <button onClick={() => setPickerMode(b.id)} className="p-1.5 rounded-lg" style={{ color: C.gray }}>
-                  <Repeat size={14} />
-                </button>
-                <button onClick={() => removeBlock(b.id)} className="p-1.5 rounded-lg" style={{ color: C.gray }}>
-                  <Trash2 size={14} />
-                </button>
-              </div>
-
-              {notesOpenIds.has(b.id) && (
-                <input
-                  type="text" value={b.notes} onChange={(e) => updateBlock(b.id, { notes: e.target.value })}
-                  placeholder="Observações (opcional)"
-                  className="w-full mb-3 rounded-lg px-3 py-2 text-xs outline-none"
-                  style={inputStyle}
-                />
               )}
-
-              <button
-                onClick={() => (b.finishedAt ? null : inProgress ? finishBlock(b.id) : startBlock(b.id))}
-                disabled={!!b.finishedAt}
-                className="mb-3 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
-                style={{
-                  background: inProgress ? `color-mix(in srgb, ${C.danger} 13%, transparent)` : `${hyrox.color}22`,
-                  color: inProgress ? C.danger : hyrox.color,
-                }}
-              >
-                {b.finishedAt ? <CheckCircle2 size={13} /> : inProgress ? <Square size={13} /> : <Play size={13} />}
-                {b.finishedAt ? "Bloco concluído" : inProgress ? "Finalizar bloco" : "Iniciar bloco"}
-              </button>
-
-              <div className="flex flex-col gap-1.5">
-                {b.sets.map((s, si) => {
-                  const skipped = s.status === "skipped";
-                  const done = s.status === "done";
-                  return (
-                    <div key={s.id} className="flex items-center gap-2 flex-wrap" style={{ opacity: skipped ? 0.45 : 1 }}>
-                      <span className="text-xs w-4 flex-shrink-0" style={{ color: C.gray }}>{si + 1}</span>
-                      <RoundFields
-                        metricType={b.metricType}
-                        round={s}
-                        onChange={(patch) => updateRound(b.id, s.id, patch)}
-                      />
-                      <button onClick={() => toggleDone(b.id, s.id)} className="p-1 flex-shrink-0">
-                        {done ? <CheckCircle2 size={20} style={{ color: hyrox.color }} /> : <Circle size={20} style={{ color: C.gray }} />}
-                      </button>
-                      <button onClick={() => toggleSkip(b.id, s.id)} className="p-1 flex-shrink-0">
-                        <MinusCircle size={16} style={{ color: skipped ? C.amber : C.gray }} />
-                      </button>
-                      <button onClick={() => removeRound(b.id, s.id)} className="p-1 flex-shrink-0 ml-auto">
-                        <Trash2 size={13} style={{ color: C.gray }} />
-                      </button>
+              <div className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+                <div className="flex items-start gap-2 mb-3">
+                  <div className="flex flex-col mt-0.5">
+                    <button onClick={() => move(b.id, -1)} disabled={i === 0} className="p-0.5 disabled:opacity-20" style={{ color: C.gray }}><ChevronUp size={13} /></button>
+                    <button onClick={() => move(b.id, 1)} disabled={i === blocks.length - 1} className="p-0.5 disabled:opacity-20" style={{ color: C.gray }}><ChevronDown size={13} /></button>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold" style={{ color: C.white, fontFamily: "'Poppins', sans-serif" }}>
+                      {b.name}{groupRounds > 1 ? ` — Volta ${b.round}/${groupRounds}` : ""}
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="flex items-center gap-1.5 mt-0.5 text-xs flex-wrap" style={{ color: category.color }}>
+                      {category.label}
+                      {targetLabel && <span style={{ color: C.amber }}>• meta {targetLabel}</span>}
+                      {b.finishedAt && <span style={{ color: C.gray }}>• {fmtDuration(b.durationSec)}</span>}
+                      {b.transitionSec > 0 && <span style={{ color: C.amber }}>• transição {fmtDuration(b.transitionSec)}</span>}
+                    </div>
+                  </div>
+                  <button onClick={() => toggleNotes(b.id)} className="p-1.5 rounded-lg" style={{ color: notesOpenIds.has(b.id) ? hyrox.color : C.gray }}>
+                    <MessageSquare size={14} />
+                  </button>
+                  <button onClick={() => setPickerMode(b.id)} className="p-1.5 rounded-lg" style={{ color: C.gray }}>
+                    <Repeat size={14} />
+                  </button>
+                  <button onClick={() => removeBlock(b.id)} className="p-1.5 rounded-lg" style={{ color: C.gray }}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
 
-              <button
-                onClick={() => addRound(b.id)}
-                className="mt-2 flex items-center gap-1 text-xs font-semibold"
-                style={{ color: hyrox.color }}
-              >
-                <Plus size={13} /> Volta
-              </button>
+                {notesOpenIds.has(b.id) && (
+                  <input
+                    type="text" value={b.notes} onChange={(e) => updateBlock(b.id, { notes: e.target.value })}
+                    placeholder="Observações (opcional)"
+                    className="w-full mb-3 rounded-lg px-3 py-2 text-xs outline-none"
+                    style={inputStyle}
+                  />
+                )}
+
+                <button
+                  onClick={() => (b.finishedAt ? null : inProgress ? finishBlock(b.id) : startBlock(b.id))}
+                  disabled={!!b.finishedAt}
+                  className="mb-3 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
+                  style={{
+                    background: inProgress ? `color-mix(in srgb, ${C.danger} 13%, transparent)` : `${hyrox.color}22`,
+                    color: inProgress ? C.danger : hyrox.color,
+                  }}
+                >
+                  {b.finishedAt ? <CheckCircle2 size={13} /> : inProgress ? <Square size={13} /> : <Play size={13} />}
+                  {b.finishedAt ? "Bloco concluído" : inProgress ? "Finalizar bloco" : "Iniciar bloco"}
+                </button>
+
+                <div className="flex flex-col gap-1.5">
+                  {b.sets.map((s, si) => {
+                    const skipped = s.status === "skipped";
+                    const done = s.status === "done";
+                    return (
+                      <div key={s.id} className="flex items-center gap-2 flex-wrap" style={{ opacity: skipped ? 0.45 : 1 }}>
+                        <span className="text-xs w-4 flex-shrink-0" style={{ color: C.gray }}>{si + 1}</span>
+                        <RoundFields
+                          metricType={b.metricType}
+                          round={s}
+                          onChange={(patch) => updateRound(b.id, s.id, patch)}
+                        />
+                        <button onClick={() => toggleDone(b.id, s.id)} className="p-1 flex-shrink-0">
+                          {done ? <CheckCircle2 size={20} style={{ color: hyrox.color }} /> : <Circle size={20} style={{ color: C.gray }} />}
+                        </button>
+                        <button onClick={() => toggleSkip(b.id, s.id)} className="p-1 flex-shrink-0">
+                          <MinusCircle size={16} style={{ color: skipped ? C.amber : C.gray }} />
+                        </button>
+                        <button onClick={() => removeRound(b.id, s.id)} className="p-1 flex-shrink-0 ml-auto">
+                          <Trash2 size={13} style={{ color: C.gray }} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => addRound(b.id)}
+                  className="mt-2 flex items-center gap-1 text-xs font-semibold"
+                  style={{ color: hyrox.color }}
+                >
+                  <Plus size={13} /> Volta
+                </button>
+              </div>
             </div>
           );
         })}
@@ -449,7 +516,7 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
           className="flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold"
           style={{ background: `${hyrox.color}14`, color: hyrox.color, border: `1px dashed ${hyrox.color}55` }}
         >
-          <Plus size={15} /> Adicionar bloco
+          <Plus size={15} /> Adicionar exercício
         </button>
 
         <div>
