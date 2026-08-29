@@ -165,6 +165,7 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
   const [saveChoiceOpen, setSaveChoiceOpen] = useState(false);
   const [pendingSession, setPendingSession] = useState(null);
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const startedAtRef = useRef(new Date().toISOString());
   const startMsRef = useRef(Date.now());
@@ -297,7 +298,23 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
     return originalKeys.some((k, i) => k !== finalKeys[i]);
   }
 
-  function handleFinish() {
+  /* onComplete faz a inserção real no Supabase (ver HyroxModule.jsx). Se
+     falhar (rede, RLS etc.), o erro sobe até aqui — a sessão continua
+     aberta com os dados intactos para o usuário tentar de novo, em vez de
+     perder o treino que acabou de registrar. */
+  async function submitSession(session, action) {
+    setSaving(true);
+    setError("");
+    try {
+      await onComplete(session, action);
+    } catch (err) {
+      setSaving(false);
+      setError(err?.message || "Não foi possível salvar o treino. Tente novamente.");
+    }
+  }
+
+  async function handleFinish() {
+    if (saving) return;
     const finalBlocks = normalizeForSave();
     if (finalBlocks.length === 0) return setError("Registre pelo menos um bloco para finalizar o treino.");
     setError("");
@@ -319,16 +336,17 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
       setPendingSession(session);
       setSaveChoiceOpen(true);
     } else {
-      onComplete(session, { type: "none" });
+      await submitSession(session, { type: "none" });
     }
   }
 
-  function handleSaveChoice(type, newTemplateName) {
+  async function handleSaveChoice(type, newTemplateName) {
     setSaveChoiceOpen(false);
-    onComplete(pendingSession, { type, newTemplateName });
+    await submitSession(pendingSession, { type, newTemplateName });
   }
 
   function handleClose() {
+    if (saving) return;
     if (doneRounds > 0 && !window.confirm("Sair sem salvar o treino? O progresso desta sessão será perdido.")) return;
     onClose();
   }
@@ -337,7 +355,7 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: C.bg }}>
       <div className="sticky top-0 z-10 flex items-center justify-between px-4 sm:px-6 py-3.5" style={{ background: `color-mix(in srgb, ${C.bg} 95%, transparent)`, borderBottom: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
         <div className="flex items-center gap-3 min-w-0">
-          <button onClick={handleClose} className="p-1.5 rounded-full flex-shrink-0" style={{ color: C.gray }}>
+          <button onClick={handleClose} disabled={saving} className="p-1.5 rounded-full flex-shrink-0 disabled:opacity-40" style={{ color: C.gray }}>
             <X size={20} />
           </button>
           <div className="min-w-0">
@@ -468,10 +486,11 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
       <div className="sticky bottom-0 px-4 sm:px-6 py-4" style={{ background: `color-mix(in srgb, ${C.bg} 95%, transparent)`, borderTop: `1px solid ${C.border}`, backdropFilter: "blur(8px)" }}>
         <button
           onClick={handleFinish}
-          className="w-full max-w-2xl mx-auto flex items-center justify-center rounded-xl py-3.5 text-sm font-semibold"
+          disabled={saving}
+          className="w-full max-w-2xl mx-auto flex items-center justify-center rounded-xl py-3.5 text-sm font-semibold disabled:opacity-60"
           style={{ background: `linear-gradient(135deg, ${hyrox.color}, #4D7C0F)`, color: C.bg }}
         >
-          Finalizar treino
+          {saving ? "Salvando…" : "Finalizar treino"}
         </button>
       </div>
 

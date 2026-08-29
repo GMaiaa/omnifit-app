@@ -45,9 +45,6 @@ export const isRaceFocus = (id) => id === "simulado" || id === "prova";
 
 export const DEFAULT_ROUNDS = 1;
 
-export const STORAGE_KEY_TEMPLATES = "omnifit:hyrox:templates:v1";
-export const STORAGE_KEY_SESSIONS = "omnifit:hyrox:sessions:v1";
-
 /* Catálogo embutido — mesma ideia do EXERCISE_CATALOG da Musculação: mantém
    nomes consistentes entre sessões (histórico/PRs por exercício dependem
    disso), com opção de exercício customizado via ExercisePicker. */
