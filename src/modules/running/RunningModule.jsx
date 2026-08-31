@@ -2,12 +2,14 @@ import { useState } from "react";
 import { AlertTriangle, LayoutDashboard, ListChecks, BarChart3, PlusCircle, Trophy } from "lucide-react";
 import { C, modalityInfo } from "../../lib/theme";
 import { Card, EmptyState } from "../../components/ui";
+import { ShareModal } from "../../components/ShareModal";
 import { WorkoutForm } from "./components/WorkoutForm";
 import { WorkoutRow } from "./components/WorkoutRow";
 import { Dashboard } from "./components/Dashboard";
 import { AnalyticsTab } from "./components/analytics/AnalyticsTab";
 import { RecordsTab } from "./components/RecordsTab";
 import { deleteRunningWorkout, mapRunningWorkoutError } from "./runningService";
+import { typeInfo } from "./constants";
 
 const corrida = modalityInfo("corrida");
 
@@ -22,8 +24,22 @@ export function RunningModule({ workouts, loading, error, addWorkout, updateWork
   const [tab, setTab] = useState("dashboard");
   const [formTarget, setFormTarget] = useState(startWithFormOpen ? true : null); // null | true (novo) | workout (edição)
   const [actionError, setActionError] = useState("");
+  const [shareTarget, setShareTarget] = useState(null);
 
   const hasBlockingError = !!error && workouts.length === 0;
+
+  function handleShareWorkout(w) {
+    setShareTarget({
+      modality: "corrida",
+      sourceType: "workout",
+      sourceId: w.id,
+      title: `${typeInfo(w.type).label} • ${w.distanceKm.toLocaleString("pt-BR")} km`,
+      payload: {
+        date: w.date, type: w.type, distanceKm: w.distanceKm, durationSec: w.durationSec,
+        avgHr: w.avgHr, calories: w.calories, rpe: w.rpe, notes: w.notes,
+      },
+    });
+  }
 
   function handleFormSave(workout) {
     if (formTarget && formTarget !== true) updateWorkout(workout);
@@ -107,7 +123,7 @@ export function RunningModule({ workouts, loading, error, addWorkout, updateWork
       ) : (
         <div className="flex flex-col gap-3">
           {workouts.map((w) => (
-            <WorkoutRow key={w.id} w={w} onEdit={setFormTarget} onDelete={handleDelete} />
+            <WorkoutRow key={w.id} w={w} onEdit={setFormTarget} onDelete={handleDelete} onShare={handleShareWorkout} />
           ))}
         </div>
       )}
@@ -126,6 +142,14 @@ export function RunningModule({ workouts, loading, error, addWorkout, updateWork
           initial={formTarget === true ? null : formTarget}
           onSave={handleFormSave}
           onClose={() => setFormTarget(null)}
+        />
+      )}
+
+      {shareTarget && (
+        <ShareModal
+          {...shareTarget}
+          accentColor={corrida.color}
+          onClose={() => setShareTarget(null)}
         />
       )}
     </div>

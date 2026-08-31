@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Bell, CheckCheck } from "lucide-react";
+import { Bell, Check, CheckCheck, X } from "lucide-react";
 import { C } from "../lib/theme";
-import { getNotifications, getUnreadCount, markAllNotificationsRead } from "../lib/notifications";
+import { getNotifications, getUnreadCount, markAllNotificationsRead, markNotificationRead } from "../lib/notifications";
+import { acceptShare, declineShare, getPendingReceivedShares, mapSharingError } from "../lib/sharingService";
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -22,9 +23,12 @@ function relativeTime(isoDate) {
    componente só busca e mostra, sem precisar saber de onde cada treino
    veio. Atualiza sozinho a cada 60s (poll simples, sem exigir habilitar
    Realtime no Supabase). */
-export function NotificationsBell() {
+export function NotificationsBell({ refetchByModality = {} }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
+  const [sharesById, setSharesById] = useState({});
+  const [respondingId, setRespondingId] = useState(null);
+  const [shareError, setShareError] = useState("");
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
   const ref = useRef(null);
@@ -56,14 +60,50 @@ export function NotificationsBell() {
     setOpen((v) => !v);
     if (!open) {
       setLoading(true);
+      setShareError("");
       try {
-        const data = await getNotifications();
-        setItems(data);
+        const [notifs, shares] = await Promise.all([
+          getNotifications(),
+          getPendingReceivedShares().catch(() => []),
+        ]);
+        setItems(notifs);
+        setSharesById(Object.fromEntries(shares.map((s) => [s.id, s])));
       } catch {
         setItems([]);
       } finally {
         setLoading(false);
       }
+    }
+  }
+
+  async function handleAcceptShare(notification, share) {
+    setRespondingId(share.id);
+    setShareError("");
+    try {
+      await acceptShare(share);
+      setItems((prev) => prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n)));
+      setSharesById((prev) => { const next = { ...prev }; delete next[share.id]; return next; });
+      refetchByModality[share.modality]?.();
+    } catch (err) {
+      setShareError(mapSharingError(err, "Não foi possível aceitar o treino. Tente novamente."));
+    } finally {
+      setRespondingId(null);
+      markNotificationRead(notification.id).catch(() => {});
+    }
+  }
+
+  async function handleDeclineShare(notification, share) {
+    setRespondingId(share.id);
+    setShareError("");
+    try {
+      await declineShare(share.id);
+      setItems((prev) => prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n)));
+      setSharesById((prev) => { const next = { ...prev }; delete next[share.id]; return next; });
+    } catch (err) {
+      setShareError(mapSharingError(err, "Não foi possível recusar o treino. Tente novamente."));
+    } finally {
+      setRespondingId(null);
+      markNotificationRead(notification.id).catch(() => {});
     }
   }
 
@@ -115,28 +155,60 @@ export function NotificationsBell() {
             )}
           </div>
 
+          {shareError && (
+            <div className="px-3 py-2 text-xs" style={{ color: C.danger }}>{shareError}</div>
+          )}
+
           <div className="max-h-80 overflow-y-auto flex flex-col gap-1 mt-1">
             {loading ? (
               <div className="py-8 text-center text-xs" style={{ color: C.gray }}>Carregando…</div>
             ) : items.length === 0 ? (
               <div className="py-8 text-center text-xs" style={{ color: C.gray }}>Nenhuma notificação ainda.</div>
             ) : (
-              items.map((n) => (
-                <div
-                  key={n.id}
-                  className="flex items-start gap-2 rounded-xl px-3 py-2.5"
-                  style={{ background: n.read ? "transparent" : `color-mix(in srgb, ${C.positive} 8%, transparent)` }}
-                >
-                  {!n.read && (
-                    <span className="mt-1.5 rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: C.positive }} />
-                  )}
-                  <div className={n.read ? "pl-3.5" : ""}>
-                    <div style={{ color: C.white, fontSize: 12.5, fontWeight: 600 }}>{n.title}</div>
-                    {n.body && <div style={{ color: C.gray, fontSize: 12 }} className="mt-0.5">{n.body}</div>}
-                    <div style={{ color: C.gray, fontSize: 10.5 }} className="mt-1">{relativeTime(n.created_at)}</div>
+              items.map((n) => {
+                const share = n.source_table === "workout_shares" ? sharesById[n.source_id] : null;
+                const responding = share && respondingId === share.id;
+                return (
+                  <div
+                    key={n.id}
+                    className="flex items-start gap-2 rounded-xl px-3 py-2.5"
+                    style={{ background: n.read ? "transparent" : `color-mix(in srgb, ${C.positive} 8%, transparent)` }}
+                  >
+                    {!n.read && (
+                      <span className="mt-1.5 rounded-full flex-shrink-0" style={{ width: 6, height: 6, background: C.positive }} />
+                    )}
+                    <div className={`flex-1 min-w-0 ${n.read ? "pl-3.5" : ""}`}>
+                      <div style={{ color: C.white, fontSize: 12.5, fontWeight: 600 }}>{n.title}</div>
+                      {n.body && <div style={{ color: C.gray, fontSize: 12 }} className="mt-0.5">{n.body}</div>}
+                      {share?.message && (
+                        <div style={{ color: C.gray, fontSize: 12 }} className="mt-0.5 italic">"{share.message}"</div>
+                      )}
+                      <div style={{ color: C.gray, fontSize: 10.5 }} className="mt-1">{relativeTime(n.created_at)}</div>
+
+                      {share && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <button
+                            onClick={() => handleAcceptShare(n, share)}
+                            disabled={responding}
+                            className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold disabled:opacity-50"
+                            style={{ background: `color-mix(in srgb, ${C.positive} 15%, transparent)`, color: C.positive }}
+                          >
+                            <Check size={12} /> {responding ? "Aceitando…" : "Aceitar"}
+                          </button>
+                          <button
+                            onClick={() => handleDeclineShare(n, share)}
+                            disabled={responding}
+                            className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold disabled:opacity-50"
+                            style={{ color: C.gray, border: `1px solid ${C.border}` }}
+                          >
+                            <X size={12} /> Recusar
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

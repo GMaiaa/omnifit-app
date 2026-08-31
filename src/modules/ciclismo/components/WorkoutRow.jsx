@@ -1,4 +1,4 @@
-import { HeartPulse, Mountain, Trash2 } from "lucide-react";
+import { HeartPulse, Mountain, Share2, Trash2 } from "lucide-react";
 import { C } from "../../../lib/theme";
 import { fmtDateShort, fmtDuration, fmtElevation, fmtSpeed } from "../../../lib/format";
 import { typeInfo } from "../constants";
@@ -7,7 +7,7 @@ import { Pill } from "../../../components/ui";
 /* ---------------------------------------------------------
    WORKOUT LIST ROW
 --------------------------------------------------------- */
-export function WorkoutRow({ w, onDelete }) {
+export function WorkoutRow({ w, onDelete, onShare }) {
   const t = typeInfo(w.type);
   const speed = w.distanceKm / (w.durationSec / 3600);
   return (
@@ -44,6 +44,11 @@ export function WorkoutRow({ w, onDelete }) {
         </div>
         {w.notes && <div className="mt-1 text-xs truncate" style={{ color: C.gray }}>{w.notes}</div>}
       </div>
+      {onShare && (
+        <button onClick={() => onShare(w)} className="p-1.5 rounded-lg flex-shrink-0" style={{ color: C.gray }}>
+          <Share2 size={14} />
+        </button>
+      )}
       <button onClick={() => onDelete(w.id)} className="p-1.5 rounded-lg flex-shrink-0" style={{ color: C.gray }}>
         <Trash2 size={16} />
       </button>

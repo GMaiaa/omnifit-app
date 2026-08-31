@@ -2,11 +2,13 @@ import { useState } from "react";
 import { LayoutDashboard, ListChecks, BarChart3, PlusCircle, Trophy } from "lucide-react";
 import { C, modalityInfo } from "../../lib/theme";
 import { EmptyState } from "../../components/ui";
+import { ShareModal } from "../../components/ShareModal";
 import { WorkoutForm } from "./components/WorkoutForm";
 import { WorkoutRow } from "./components/WorkoutRow";
 import { Dashboard } from "./components/Dashboard";
 import { AnalyticsTab } from "./components/analytics/AnalyticsTab";
 import { RecordsTab } from "./components/RecordsTab";
+import { typeInfo } from "./constants";
 
 const ciclismo = modalityInfo("ciclismo");
 
@@ -20,6 +22,22 @@ const SUB_NAV = [
 export function CiclismoModule({ workouts, loading, saveError, addWorkout, deleteWorkout, startWithFormOpen }) {
   const [tab, setTab] = useState("dashboard");
   const [showForm, setShowForm] = useState(!!startWithFormOpen);
+  const [shareTarget, setShareTarget] = useState(null);
+
+  function handleShareWorkout(w) {
+    setShareTarget({
+      modality: "ciclismo",
+      sourceType: "workout",
+      sourceId: w.id,
+      title: `${typeInfo(w.type).label} • ${w.distanceKm.toLocaleString("pt-BR")} km`,
+      payload: {
+        date: w.date, type: w.type, distanceKm: w.distanceKm, durationSec: w.durationSec,
+        title: w.title, elevationGainM: w.elevationGainM, avgHr: w.avgHr, maxHr: w.maxHr,
+        avgPower: w.avgPower, maxPower: w.maxPower, avgCadence: w.avgCadence, maxCadence: w.maxCadence,
+        calories: w.calories, rpe: w.rpe, notes: w.notes,
+      },
+    });
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -68,7 +86,7 @@ export function CiclismoModule({ workouts, loading, saveError, addWorkout, delet
         />
       ) : (
         <div className="flex flex-col gap-3">
-          {workouts.map((w) => <WorkoutRow key={w.id} w={w} onDelete={deleteWorkout} />)}
+          {workouts.map((w) => <WorkoutRow key={w.id} w={w} onDelete={deleteWorkout} onShare={handleShareWorkout} />)}
         </div>
       )}
 
@@ -85,6 +103,14 @@ export function CiclismoModule({ workouts, loading, saveError, addWorkout, delet
         <WorkoutForm
           onSave={(w) => { addWorkout(w); setShowForm(false); }}
           onClose={() => setShowForm(false)}
+        />
+      )}
+
+      {shareTarget && (
+        <ShareModal
+          {...shareTarget}
+          accentColor={ciclismo.color}
+          onClose={() => setShareTarget(null)}
         />
       )}
     </div>

@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { ArrowLeft, Pencil, Play, Trash2 } from "lucide-react";
+import { ArrowLeft, Pencil, Play, Share2, Target, Trash2 } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtDateShort, fmtDuration, fmtPace } from "../../../lib/format";
 import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
-import { categoryInfo, focusInfo } from "../constants";
+import { categoryInfo, focusInfo, formatGoalValue } from "../constants";
 import { exerciseHistory } from "../analytics";
 import { Card, CardHeader, Pill, Select } from "../../../components/ui";
 
@@ -18,7 +18,7 @@ function formatMetricValue(metricType, value) {
   return `${fmtPace(value)} /km`;
 }
 
-export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, onStart }) {
+export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, onShare, onStart }) {
   useLockBodyScroll();
   const templateSessions = useMemo(
     () => sessions.filter((s) => s.templateId === template.id),
@@ -48,6 +48,7 @@ export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, 
           <div className="text-sm font-semibold truncate" style={{ color: C.white, fontFamily: "'Poppins', sans-serif" }}>{template.name}</div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
+          <button onClick={onShare} className="p-1.5 rounded-lg" style={{ color: C.gray }}><Share2 size={16} /></button>
           <button onClick={onEdit} className="p-1.5 rounded-lg" style={{ color: C.gray }}><Pencil size={16} /></button>
           <button onClick={onDelete} className="p-1.5 rounded-lg" style={{ color: C.gray }}><Trash2 size={16} /></button>
         </div>
@@ -67,9 +68,17 @@ export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, 
           <div className="flex flex-col gap-2">
             {template.blocks.slice().sort((a, b) => a.order - b.order).map((b, i) => {
               const category = categoryInfo(b.category);
+              const goalLabel = formatGoalValue(b.goalType, b.goalValue);
               return (
-                <div key={b.id} className="flex items-center justify-between text-sm">
-                  <span style={{ color: C.white }}>Bloco {i + 1} — {b.name}{b.rounds > 1 ? ` (${b.rounds}x)` : ""}</span>
+                <div key={b.id} className="flex items-center justify-between text-sm gap-2">
+                  <div className="min-w-0">
+                    <div style={{ color: C.white }} className="truncate">Bloco {i + 1} — {b.name}{b.rounds > 1 ? ` (${b.rounds}x)` : ""}</div>
+                    {goalLabel && (
+                      <div className="flex items-center gap-1 mt-0.5 text-xs font-semibold" style={{ color: hyrox.color }}>
+                        <Target size={11} /> Meta: {goalLabel}
+                      </div>
+                    )}
+                  </div>
                   <Pill color={category.color}>{category.label}</Pill>
                 </div>
               );

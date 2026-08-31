@@ -1,4 +1,4 @@
-import { Pencil, Play, Trash2 } from "lucide-react";
+import { Pencil, Share2, Play, Trash2 } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtDateShort } from "../../../lib/format";
 import { muscleGroupInfo } from "../constants";
@@ -6,7 +6,7 @@ import { Card, Pill } from "../../../components/ui";
 
 const musculacao = modalityInfo("musculacao");
 
-export function TemplateCard({ template, lastSessionDate, onStart, onEdit, onDelete, onOpenDetail }) {
+export function TemplateCard({ template, lastSessionDate, onStart, onEdit, onDelete, onShare, onOpenDetail }) {
   const groups = [...new Set(template.exercises.map((e) => e.muscleGroup))].map(muscleGroupInfo);
 
   return (
@@ -22,6 +22,9 @@ export function TemplateCard({ template, lastSessionDate, onStart, onEdit, onDel
           </div>
         </button>
         <div className="flex items-center gap-1 flex-shrink-0">
+          <button onClick={onShare} className="p-1.5 rounded-lg" style={{ color: C.gray }}>
+            <Share2 size={14} />
+          </button>
           <button onClick={onEdit} className="p-1.5 rounded-lg" style={{ color: C.gray }}>
             <Pencil size={14} />
           </button>

@@ -157,7 +157,14 @@ export default function OmnifitApp() {
             {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
           </button>
 
-          <NotificationsBell />
+          <NotificationsBell
+            refetchByModality={{
+              musculacao: strengthTemplates.refetch,
+              hyrox: hyroxTemplates.refetch,
+              corrida: running.refetch,
+              ciclismo: cycling.refetch,
+            }}
+          />
 
           <div className="relative" ref={profileMenuRef}>
             <button

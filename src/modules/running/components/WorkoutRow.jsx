@@ -1,4 +1,4 @@
-import { HeartPulse, Pencil, Trash2 } from "lucide-react";
+import { HeartPulse, Pencil, Share2, Trash2 } from "lucide-react";
 import { C } from "../../../lib/theme";
 import { fmtDateShort, fmtPace } from "../../../lib/format";
 import { formatDurationHMS } from "../format";
@@ -8,7 +8,7 @@ import { Pill } from "../../../components/ui";
 /* ---------------------------------------------------------
    WORKOUT LIST ROW
 --------------------------------------------------------- */
-export function WorkoutRow({ w, onEdit, onDelete }) {
+export function WorkoutRow({ w, onEdit, onDelete, onShare }) {
   const t = typeInfo(w.type);
   // Protege registros antigos: usa o pace salvo no banco (já mapeado por
   // runningService) e só recalcula localmente se ele vier ausente/inválido.
@@ -47,8 +47,13 @@ export function WorkoutRow({ w, onEdit, onDelete }) {
         </div>
         {w.notes && <div className="mt-1 text-xs truncate" style={{ color: C.gray }}>{w.notes}</div>}
       </div>
-      {(onEdit || onDelete) && (
+      {(onEdit || onDelete || onShare) && (
         <div className="flex items-center gap-1 flex-shrink-0">
+          {onShare && (
+            <button onClick={() => onShare(w)} className="p-1.5 rounded-lg" style={{ color: C.gray }}>
+              <Share2 size={14} />
+            </button>
+          )}
           {onEdit && (
             <button onClick={() => onEdit(w)} className="p-1.5 rounded-lg" style={{ color: C.gray }}>
               <Pencil size={15} />

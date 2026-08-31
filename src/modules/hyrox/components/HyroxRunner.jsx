@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2, ChevronDown, ChevronUp, Circle, MessageSquare,
-  MinusCircle, Play, Plus, Repeat, Square, Timer, Trash2, X,
+  MinusCircle, Play, Plus, Repeat, Square, Target, Timer, Trash2, X,
 } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtDuration, todayStr, uid } from "../../../lib/format";
 import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
-import { DEFAULT_ROUNDS, FOCUS, categoryInfo } from "../constants";
+import { DEFAULT_ROUNDS, FOCUS, categoryInfo, formatGoalValue } from "../constants";
 import { hyroxExerciseKeyOf } from "../analytics";
 import { Select } from "../../../components/ui";
 import { ExercisePicker } from "./ExercisePicker";
@@ -55,6 +55,8 @@ function blockFromTemplateEntry(tb, sessions) {
     category: tb.category,
     metricType: tb.metricType,
     notes: tb.notes || "",
+    goalType: tb.goalType ?? null,
+    goalValue: tb.goalValue ?? null,
     startedAt: null, finishedAt: null, durationSec: 0, transitionSec: 0,
     sets: sets.length ? sets : [emptyRound()],
   };
@@ -68,6 +70,8 @@ function blockFromPicked(entry) {
     category: entry.category,
     metricType: entry.metricType,
     notes: "",
+    goalType: null,
+    goalValue: null,
     startedAt: null, finishedAt: null, durationSec: 0, transitionSec: 0,
     sets: [emptyRound()],
   };
@@ -273,6 +277,8 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
         category: b.category,
         metricType: b.metricType,
         notes: b.notes,
+        goalType: b.goalType ?? null,
+        goalValue: b.goalValue ?? null,
         order: i,
         startedAt: b.startedAt,
         finishedAt: b.finishedAt,
@@ -375,6 +381,7 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
         {blocks.map((b, i) => {
           const category = categoryInfo(b.category);
           const inProgress = !!b.startedAt && !b.finishedAt;
+          const goalLabel = formatGoalValue(b.goalType, b.goalValue);
           return (
             <div key={b.id} className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
               <div className="flex items-start gap-2 mb-3">
@@ -386,11 +393,16 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
                   <div className="text-sm font-semibold" style={{ color: C.white, fontFamily: "'Poppins', sans-serif" }}>
                     Bloco {i + 1} — {b.name}
                   </div>
-                  <div className="flex items-center gap-1.5 mt-0.5 text-xs" style={{ color: category.color }}>
+                  <div className="flex items-center gap-1.5 mt-0.5 text-xs flex-wrap" style={{ color: category.color }}>
                     {category.label}
                     {b.finishedAt && <span style={{ color: C.gray }}>• {fmtDuration(b.durationSec)}</span>}
                     {b.transitionSec > 0 && <span style={{ color: C.amber }}>• transição {fmtDuration(b.transitionSec)}</span>}
                   </div>
+                  {goalLabel && (
+                    <div className="flex items-center gap-1 mt-1 text-xs font-semibold" style={{ color: hyrox.color }}>
+                      <Target size={11} /> Meta: {goalLabel}
+                    </div>
+                  )}
                 </div>
                 <button onClick={() => toggleNotes(b.id)} className="p-1.5 rounded-lg" style={{ color: notesOpenIds.has(b.id) ? hyrox.color : C.gray }}>
                   <MessageSquare size={14} />

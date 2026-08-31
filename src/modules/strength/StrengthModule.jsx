@@ -8,6 +8,7 @@ import {
   mapStrengthError, updateStrengthSession, updateStrengthTemplate,
 } from "./strengthService";
 import { Card, EmptyState } from "../../components/ui";
+import { ShareModal } from "../../components/ShareModal";
 import { TemplateCard } from "./components/TemplateCard";
 import { TemplateForm } from "./components/TemplateForm";
 import { TemplateDetail } from "./components/TemplateDetail";
@@ -45,6 +46,17 @@ export function StrengthModule({ templates, sessions }) {
   const [editingSession, setEditingSession] = useState(null);
   const [summary, setSummary] = useState(null);
   const [actionError, setActionError] = useState("");
+  const [shareTarget, setShareTarget] = useState(null);
+
+  function handleShareTemplate(t) {
+    setShareTarget({
+      modality: "musculacao",
+      sourceType: "template",
+      sourceId: t.id,
+      title: t.name,
+      payload: { name: t.name, exercises: t.exercises },
+    });
+  }
 
   function handleSaveTemplate(template) {
     const isEdit = formTarget && formTarget !== true;
@@ -236,6 +248,7 @@ export function StrengthModule({ templates, sessions }) {
               onStart={() => setActiveSession(t)}
               onEdit={() => setFormTarget(t)}
               onDelete={() => handleDeleteTemplate(t.id)}
+              onShare={() => handleShareTemplate(t)}
               onOpenDetail={() => setDetailTemplate(t)}
             />
           ))}
@@ -278,6 +291,7 @@ export function StrengthModule({ templates, sessions }) {
           onClose={() => setDetailTemplate(null)}
           onEdit={() => { setFormTarget(detailTemplate); setDetailTemplate(null); }}
           onDelete={() => handleDeleteTemplate(detailTemplate.id)}
+          onShare={() => handleShareTemplate(detailTemplate)}
           onStart={() => { setActiveSession(detailTemplate); setDetailTemplate(null); }}
           onEditSession={setEditingSession}
           onDeleteSession={handleDeleteSession}
@@ -298,6 +312,14 @@ export function StrengthModule({ templates, sessions }) {
           session={editingSession}
           onSave={handleUpdateSession}
           onClose={() => setEditingSession(null)}
+        />
+      )}
+
+      {shareTarget && (
+        <ShareModal
+          {...shareTarget}
+          accentColor={musculacao.color}
+          onClose={() => setShareTarget(null)}
         />
       )}
     </div>

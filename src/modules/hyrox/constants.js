@@ -1,4 +1,5 @@
 import { modalityInfo } from "../../lib/theme";
+import { fmtDistanceM, fmtDuration } from "../../lib/format";
 
 const hyroxColor = modalityInfo("hyrox").color;
 
@@ -44,6 +45,32 @@ export const focusInfo = (id) => FOCUS.find((f) => f.id === id) || FOCUS[0];
 export const isRaceFocus = (id) => id === "simulado" || id === "prova";
 
 export const DEFAULT_ROUNDS = 1;
+
+/* Meta por exercício/bloco — independente do metricType (que só rege quais
+   campos aparecem no REGISTRO do resultado real). Uma ficha pode, por
+   exemplo, ter uma meta de calorias no Assault Bike mesmo esse exercício
+   registrando distância — a meta é só a referência mostrada ao atleta
+   durante a execução, não muda o que é registrado. */
+export const GOAL_TYPES = [
+  { id: "reps", label: "Reps", placeholder: "reps" },
+  { id: "distance", label: "Distância", placeholder: "metros" },
+  { id: "calories", label: "Calorias", placeholder: "cal" },
+  { id: "time", label: "Tempo", placeholder: "segundos" },
+];
+export const goalTypeInfo = (id) => GOAL_TYPES.find((g) => g.id === id) || null;
+
+/* Formata o valor de uma meta pro tipo certo (distância em km/m, tempo em
+   min:seg) — retorna null quando não há meta definida, pra quem consome
+   decidir se mostra o badge ou não. */
+export function formatGoalValue(goalType, goalValue) {
+  const n = Number(goalValue);
+  if (!goalType || !Number.isFinite(n) || n <= 0) return null;
+  if (goalType === "reps") return `${n} reps`;
+  if (goalType === "distance") return fmtDistanceM(n);
+  if (goalType === "calories") return `${n} cal`;
+  if (goalType === "time") return fmtDuration(n);
+  return null;
+}
 
 /* Catálogo embutido — mesma ideia do EXERCISE_CATALOG da Musculação: mantém
    nomes consistentes entre sessões (histórico/PRs por exercício dependem

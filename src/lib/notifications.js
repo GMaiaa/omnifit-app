@@ -5,12 +5,21 @@ import { supabase } from "./supabase";
 export async function getNotifications(limit = 20) {
   const { data, error } = await supabase
     .from("notifications")
-    .select("id, title, body, type, read, created_at")
+    .select("id, title, body, type, source_table, source_id, read, created_at")
     .order("created_at", { ascending: false })
     .limit(limit);
 
   if (error) throw error;
   return data ?? [];
+}
+
+export async function markNotificationRead(id) {
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("id", id);
+
+  if (error) throw error;
 }
 
 export async function getUnreadCount() {

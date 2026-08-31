@@ -8,6 +8,7 @@ import {
   mapHyroxError, updateHyroxTemplate,
 } from "./hyroxService";
 import { Card, EmptyState } from "../../components/ui";
+import { ShareModal } from "../../components/ShareModal";
 import { TemplateCard } from "./components/TemplateCard";
 import { TemplateForm } from "./components/TemplateForm";
 import { TemplateDetail } from "./components/TemplateDetail";
@@ -45,6 +46,17 @@ export function HyroxModule({ templates, sessions }) {
   const [activeSession, setActiveSession] = useState(null);
   const [summary, setSummary] = useState(null);
   const [actionError, setActionError] = useState("");
+  const [shareTarget, setShareTarget] = useState(null);
+
+  function handleShareTemplate(t) {
+    setShareTarget({
+      modality: "hyrox",
+      sourceType: "template",
+      sourceId: t.id,
+      title: t.name,
+      payload: { name: t.name, focus: t.focus, blocks: t.blocks },
+    });
+  }
 
   function handleSaveTemplate(template) {
     const isEdit = formTarget && formTarget !== true;
@@ -208,6 +220,7 @@ export function HyroxModule({ templates, sessions }) {
               onStart={() => setActiveSession(t)}
               onEdit={() => setFormTarget(t)}
               onDelete={() => handleDeleteTemplate(t.id)}
+              onShare={() => handleShareTemplate(t)}
               onOpenDetail={() => setDetailTemplate(t)}
             />
           ))}
@@ -250,6 +263,7 @@ export function HyroxModule({ templates, sessions }) {
           onClose={() => setDetailTemplate(null)}
           onEdit={() => { setFormTarget(detailTemplate); setDetailTemplate(null); }}
           onDelete={() => handleDeleteTemplate(detailTemplate.id)}
+          onShare={() => handleShareTemplate(detailTemplate)}
           onStart={() => { setActiveSession(detailTemplate); setDetailTemplate(null); }}
         />
       )}
@@ -260,6 +274,14 @@ export function HyroxModule({ templates, sessions }) {
           sessions={sessions.sessions}
           onComplete={handleSessionComplete}
           onClose={() => setActiveSession(null)}
+        />
+      )}
+
+      {shareTarget && (
+        <ShareModal
+          {...shareTarget}
+          accentColor={hyrox.color}
+          onClose={() => setShareTarget(null)}
         />
       )}
     </div>
