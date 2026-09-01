@@ -3,7 +3,7 @@ import { CheckCircle2, Circle, MinusCircle, Plus, Trash2, X } from "lucide-react
 import { C, modalityInfo } from "../../../lib/theme";
 import { uid } from "../../../lib/format";
 import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
-import { muscleGroupInfo } from "../constants";
+import { exerciseMetricType, muscleGroupInfo } from "../constants";
 
 const musculacao = modalityInfo("musculacao");
 
@@ -16,7 +16,7 @@ function durationParts(durationSec) {
 }
 
 function emptySet() {
-  return { id: uid(), weight: null, reps: null, status: "pending", notes: "" };
+  return { id: uid(), weight: null, reps: null, durationSec: null, status: "pending", notes: "" };
 }
 
 /* ---------------------------------------------------------
@@ -67,17 +67,26 @@ export function SessionEditor({ session, onSave, onClose }) {
 
   function normalizeForSave() {
     return exercises
-      .map((ex) => ({
-        ...ex,
-        sets: ex.sets
-          .map((s) => {
-            const weight = s.weight === null || s.weight === "" ? null : parseFloat(s.weight);
-            if (s.status === "skipped") return { ...s, weight, reps: s.reps ?? null };
-            if (weight > 0 && s.reps > 0) return { ...s, weight, status: "done" };
-            return null; // vazio, nunca preenchido — descarta
-          })
-          .filter(Boolean),
-      }))
+      .map((ex) => {
+        const metricType = exerciseMetricType(ex);
+        return {
+          ...ex,
+          sets: ex.sets
+            .map((s) => {
+              const weight = s.weight === null || s.weight === "" ? null : parseFloat(s.weight);
+              const durationSec = s.durationSec === null || s.durationSec === "" ? null : parseInt(s.durationSec, 10);
+              if (s.status === "skipped") return { ...s, weight, reps: s.reps ?? null, durationSec };
+              const hasValue = metricType === "time"
+                ? durationSec > 0
+                : metricType === "reps_only"
+                  ? s.reps > 0
+                  : weight > 0 && s.reps > 0;
+              if (hasValue) return { ...s, weight, durationSec, status: "done" };
+              return null; // vazio, nunca preenchido — descarta
+            })
+            .filter(Boolean),
+        };
+      })
       .filter((ex) => ex.sets.length > 0);
   }
 
@@ -179,13 +188,19 @@ export function SessionEditor({ session, onSave, onClose }) {
 
         {exercises.map((ex) => {
           const group = muscleGroupInfo(ex.muscleGroup);
+          const metricType = exerciseMetricType(ex);
           return (
             <div key={ex.id} className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
               <div className="flex items-start gap-2 mb-3">
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold" style={{ color: C.white, fontFamily: "'Poppins', sans-serif" }}>{ex.name}</div>
                   <div className="flex items-center gap-1.5 mt-0.5 text-xs" style={{ color: group.color }}>
-                    {group.label}<span style={{ color: C.gray }}>• {ex.equipment}</span>
+                    {group.label}
+                    <span style={{ color: C.gray }}>
+                      • {ex.equipment}
+                      {metricType === "time" && " • por tempo"}
+                      {metricType === "reps_only" && " • só reps"}
+                    </span>
                   </div>
                 </div>
                 <button onClick={() => removeExercise(ex.id)} disabled={saving} className="p-1.5 rounded-lg disabled:opacity-40" style={{ color: C.gray }}>
@@ -200,25 +215,45 @@ export function SessionEditor({ session, onSave, onClose }) {
                   return (
                     <div key={s.id} className="flex items-center gap-2 rounded-lg" style={{ opacity: skipped ? 0.45 : 1 }}>
                       <span className="text-xs w-4 flex-shrink-0" style={{ color: C.gray }}>{si + 1}</span>
-                      <input
-                        type="text" inputMode="decimal" placeholder="kg" value={s.weight ?? ""}
-                        disabled={skipped || saving}
-                        onChange={(e) => {
-                          const raw = e.target.value.replace(",", ".");
-                          if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
-                          updateSet(ex.id, s.id, { weight: raw === "" ? null : raw });
-                        }}
-                        className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none"
-                        style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
-                      />
-                      <span style={{ color: C.gray, fontSize: 12 }}>×</span>
-                      <input
-                        type="number" inputMode="numeric" placeholder="reps" value={s.reps ?? ""}
-                        disabled={skipped || saving}
-                        onChange={(e) => updateSet(ex.id, s.id, { reps: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
-                        className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none"
-                        style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
-                      />
+                      {metricType === "time" ? (
+                        <input
+                          type="number" inputMode="numeric" placeholder="segundos" value={s.durationSec ?? ""}
+                          disabled={skipped || saving}
+                          onChange={(e) => updateSet(ex.id, s.id, { durationSec: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
+                          className="w-20 rounded-lg px-2 py-2 text-sm text-center outline-none"
+                          style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
+                        />
+                      ) : metricType === "reps_only" ? (
+                        <input
+                          type="number" inputMode="numeric" placeholder="reps" value={s.reps ?? ""}
+                          disabled={skipped || saving}
+                          onChange={(e) => updateSet(ex.id, s.id, { reps: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
+                          className="w-20 rounded-lg px-2 py-2 text-sm text-center outline-none"
+                          style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
+                        />
+                      ) : (
+                        <>
+                          <input
+                            type="text" inputMode="decimal" placeholder="kg" value={s.weight ?? ""}
+                            disabled={skipped || saving}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(",", ".");
+                              if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
+                              updateSet(ex.id, s.id, { weight: raw === "" ? null : raw });
+                            }}
+                            className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none"
+                            style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
+                          />
+                          <span style={{ color: C.gray, fontSize: 12 }}>×</span>
+                          <input
+                            type="number" inputMode="numeric" placeholder="reps" value={s.reps ?? ""}
+                            disabled={skipped || saving}
+                            onChange={(e) => updateSet(ex.id, s.id, { reps: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
+                            className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none"
+                            style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
+                          />
+                        </>
+                      )}
                       <button onClick={() => toggleDone(ex.id, s.id)} disabled={saving} className="p-1 flex-shrink-0">
                         {done ? <CheckCircle2 size={20} style={{ color: musculacao.color }} /> : <Circle size={20} style={{ color: C.gray }} />}
                       </button>

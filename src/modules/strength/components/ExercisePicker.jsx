@@ -3,7 +3,7 @@ import { Search, X } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { normalizeSearch } from "../../../lib/format";
 import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
-import { EQUIPMENT, EXERCISE_CATALOG, MUSCLE_GROUPS } from "../constants";
+import { EQUIPMENT, EXERCISE_CATALOG, METRIC_TYPES, MUSCLE_GROUPS } from "../constants";
 
 const musculacao = modalityInfo("musculacao");
 
@@ -18,6 +18,7 @@ export function ExercisePicker({ onSelect, onClose }) {
   const [customName, setCustomName] = useState("");
   const [customGroup, setCustomGroup] = useState(MUSCLE_GROUPS[0].id);
   const [customEquipment, setCustomEquipment] = useState(EQUIPMENT[0]);
+  const [customMetricType, setCustomMetricType] = useState(METRIC_TYPES[0].id);
 
   const results = useMemo(() => {
     const q = normalizeSearch(query);
@@ -35,12 +36,18 @@ export function ExercisePicker({ onSelect, onClose }) {
   }, [query]);
 
   function pick(entry) {
-    onSelect({ catalogId: entry.id, name: entry.name, muscleGroup: entry.muscleGroup, equipment: entry.equipment });
+    onSelect({
+      catalogId: entry.id, name: entry.name, muscleGroup: entry.muscleGroup,
+      equipment: entry.equipment, metricType: entry.metricType,
+    });
   }
 
   function saveCustom() {
     if (!customName.trim()) return;
-    onSelect({ catalogId: null, name: customName.trim(), muscleGroup: customGroup, equipment: customEquipment });
+    onSelect({
+      catalogId: null, name: customName.trim(), muscleGroup: customGroup,
+      equipment: customEquipment, metricType: customMetricType,
+    });
   }
 
   return (
@@ -98,6 +105,25 @@ export function ExercisePicker({ onSelect, onClose }) {
                 {EQUIPMENT.map((eq) => <option key={eq} value={eq}>{eq}</option>)}
               </select>
             </div>
+            <div>
+              <label className="text-xs font-semibold" style={{ color: C.gray }}>Como é registrado</label>
+              <div className="mt-1.5 grid grid-cols-1 gap-1.5">
+                {METRIC_TYPES.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => setCustomMetricType(m.id)}
+                    className="rounded-lg px-3 py-2 text-xs font-semibold text-left transition"
+                    style={{
+                      background: customMetricType === m.id ? `${musculacao.color}26` : C.surface2,
+                      color: customMetricType === m.id ? musculacao.color : C.gray,
+                      border: `1px solid ${customMetricType === m.id ? musculacao.color : C.border}`,
+                    }}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <button
               onClick={saveCustom}
               disabled={!customName.trim()}
@@ -138,7 +164,11 @@ export function ExercisePicker({ onSelect, onClose }) {
                       style={{ color: C.white }}
                     >
                       <span>{e.name}</span>
-                      <span style={{ color: C.gray, fontSize: 11 }}>{e.equipment}</span>
+                      <span style={{ color: C.gray, fontSize: 11 }}>
+                        {e.equipment}
+                        {e.metricType === "time" && " • por tempo"}
+                        {e.metricType === "reps_only" && " • só reps"}
+                      </span>
                     </button>
                   ))}
                 </div>

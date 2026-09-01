@@ -16,6 +16,7 @@ function newExerciseRow(entry) {
     name: entry.name,
     muscleGroup: entry.muscleGroup,
     equipment: entry.equipment,
+    metricType: entry.metricType || "load_reps",
     notes: "",
     defaultSets: DEFAULT_SETS,
   };
@@ -138,7 +139,11 @@ export function TemplateForm({ initial, onSave, onClose }) {
                         <div className="text-sm font-semibold truncate" style={{ color: C.white }}>{ex.name}</div>
                         <div className="flex items-center gap-1.5 mt-0.5 text-xs" style={{ color: group.color }}>
                           {group.label}
-                          <span style={{ color: C.gray }}>• {ex.equipment}</span>
+                          <span style={{ color: C.gray }}>
+                            • {ex.equipment}
+                            {ex.metricType === "time" && " • por tempo"}
+                            {ex.metricType === "reps_only" && " • só reps"}
+                          </span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1">

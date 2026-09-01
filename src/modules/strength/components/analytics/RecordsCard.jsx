@@ -1,9 +1,16 @@
 import { useMemo } from "react";
 import { Trophy } from "lucide-react";
 import { C } from "../../../../lib/theme";
-import { fmtDateShort, fmtVolume, fmtWeight } from "../../../../lib/format";
+import { fmtDateShort, fmtDuration, fmtVolume } from "../../../../lib/format";
 import { exerciseOptions, personalRecords } from "../../analytics";
 import { Card, CardHeader } from "../../../../components/ui";
+
+function formatRecordValue(metricType, value) {
+  if (value === null || value === undefined) return "—";
+  if (metricType === "time") return fmtDuration(value);
+  if (metricType === "reps_only") return `${Math.round(value)} reps`;
+  return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg`;
+}
 
 export function RecordsCard({ sessions }) {
   const records = useMemo(() => personalRecords(sessions), [sessions]);
@@ -11,7 +18,7 @@ export function RecordsCard({ sessions }) {
 
   return (
     <Card>
-      <CardHeader title="Recordes pessoais" description="Melhor carga e 1RM estimado por exercício" />
+      <CardHeader title="Recordes pessoais" description="Melhor resultado por exercício, de acordo com o tipo de registro" />
 
       {exercises.length === 0 ? (
         <p className="text-sm py-4" style={{ color: C.gray }}>Sem treinos registrados ainda.</p>
@@ -21,21 +28,22 @@ export function RecordsCard({ sessions }) {
             <thead>
               <tr>
                 <th className="text-left px-2 py-1.5" style={{ color: C.gray, fontWeight: 600 }}>Exercício</th>
-                <th className="text-right px-2 py-1.5" style={{ color: C.gray, fontWeight: 600 }}>Melhor carga</th>
+                <th className="text-right px-2 py-1.5" style={{ color: C.gray, fontWeight: 600 }}>Melhor resultado</th>
                 <th className="text-right px-2 py-1.5" style={{ color: C.gray, fontWeight: 600 }}>1RM estimado</th>
               </tr>
             </thead>
             <tbody>
               {exercises.map((opt) => {
                 const rec = records.byExercise[opt.key];
+                const metricType = rec?.metricType || "load_reps";
                 return (
                   <tr key={opt.key} style={{ borderTop: `1px solid ${C.borderSoft}` }}>
                     <td className="px-2 py-1.5" style={{ color: C.white, fontWeight: 600 }}>{opt.name}</td>
                     <td className="text-right px-2 py-1.5" style={{ color: rec ? C.white : C.gray }}>
-                      {rec ? fmtWeight(rec.bestWeight) : "—"}
+                      {rec ? formatRecordValue(metricType, metricType === "load_reps" ? rec.bestWeight : rec.bestValue) : "—"}
                     </td>
                     <td className="text-right px-2 py-1.5" style={{ color: rec ? C.white : C.gray }}>
-                      {rec ? fmtWeight(rec.best1RM) : "—"}
+                      {rec && metricType === "load_reps" ? formatRecordValue("load_reps", rec.best1RM) : "—"}
                     </td>
                   </tr>
                 );

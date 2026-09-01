@@ -2,11 +2,18 @@ import { useMemo } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Activity } from "lucide-react";
 import { C, modalityInfo } from "../../../../lib/theme";
-import { fmtDateShort } from "../../../../lib/format";
+import { fmtDateShort, fmtDuration } from "../../../../lib/format";
 import { loadProgression } from "../../analytics";
 import { Card, CardHeader, DeltaBadge, EmptyState } from "../../../../components/ui";
 
 const musculacao = modalityInfo("musculacao");
+
+function formatValue(metricType, v) {
+  if (v === null || v === undefined) return "—";
+  if (metricType === "time") return fmtDuration(v);
+  if (metricType === "reps_only") return `${Math.round(v)} reps`;
+  return `${v} kg`;
+}
 
 export function StrengthEvolutionCard({ sessions, exerciseKey, exerciseName, windowWeeks }) {
   const trend = useMemo(
@@ -17,7 +24,7 @@ export function StrengthEvolutionCard({ sessions, exerciseKey, exerciseName, win
   const data = useMemo(
     () => trend.points.map((p, i) => ({
       label: fmtDateShort(p.date),
-      e1rm: p.e1rm,
+      value: p.primaryValue,
       trendline: trend.trendline[i]?.value ?? null,
     })),
     [trend]
@@ -33,11 +40,13 @@ export function StrengthEvolutionCard({ sessions, exerciseKey, exerciseName, win
     );
   }
 
+  const metricLabel = trend.metricType === "time" ? "Hold mais longo" : trend.metricType === "reps_only" ? "Melhor repetição" : "1RM estimado";
+
   return (
     <Card>
       <CardHeader
         title={`Evolução de força — ${exerciseName}`}
-        description={`1RM estimado, últimas ${windowWeeks} semanas (${trend.count} execuções)`}
+        description={`${metricLabel}, últimas ${windowWeeks} semanas (${trend.count} execuções)`}
         right={<DeltaBadge value={trend.loadChangePct} />}
       />
       <div style={{ height: 220 }}>
@@ -49,9 +58,9 @@ export function StrengthEvolutionCard({ sessions, exerciseKey, exerciseName, win
             <Tooltip
               contentStyle={{ background: C.bgSoft, border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 12 }}
               labelStyle={{ color: C.white }}
-              formatter={(v, name) => [v ? `${v} kg` : "—", name === "trendline" ? "Tendência" : "1RM estimado"]}
+              formatter={(v, name) => [formatValue(trend.metricType, v), name === "trendline" ? "Tendência" : metricLabel]}
             />
-            <Line type="monotone" dataKey="e1rm" stroke={musculacao.color} strokeWidth={2.5} dot={{ fill: musculacao.color, r: 3 }} connectNulls />
+            <Line type="monotone" dataKey="value" stroke={musculacao.color} strokeWidth={2.5} dot={{ fill: musculacao.color, r: 3 }} connectNulls />
             <Line type="monotone" dataKey="trendline" stroke={C.gray} strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
           </LineChart>
         </ResponsiveContainer>

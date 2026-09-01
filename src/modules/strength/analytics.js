@@ -1,27 +1,47 @@
-import { MUSCLE_GROUPS } from "./constants";
+import { MUSCLE_GROUPS, exerciseMetricType } from "./constants";
 import { addDays, mondayOf, todayStr } from "../../lib/format";
 
 /* All functions here assume finished Sessions: SessionRunner normalizes
-   every set's status to either "done" (has valid weight+reps) or "skipped"
-   before persisting, so analytics only ever needs to filter on "done". */
+   every set's status to either "done" (has a valid value for the
+   exercise's metricType) or "skipped" before persisting, so analytics only
+   ever needs to filter on "done".
+
+   Três tipos de série, mutuamente exclusivos (ver METRIC_TYPES em
+   constants.js):
+   - load_reps: carga x repetições (padrão).
+   - reps_only: só repetições, sem carga (peso corporal).
+   - time: só duração, sem carga nem reps (isometria).
+   Misturar os três num único número (ex: somar segundos de prancha dentro
+   do "volume em kg") seria impreciso — por isso volume/1RM só existem pra
+   load_reps, e séries sem carga contam pra frequência/contagem de séries
+   mas não entram no volume em kg. */
 
 /* ---------------------------------------------------------
    LOW-LEVEL HELPERS
 --------------------------------------------------------- */
 export const exerciseKeyOf = (ex) => ex.sourceExerciseId || ex.name;
 
-function isCountedSet(set) {
-  return set.status === "done" && set.weight > 0 && set.reps > 0;
+function isCountedSet(set, metricType) {
+  if (set.status !== "done") return false;
+  if (metricType === "time") return set.durationSec > 0;
+  if (metricType === "reps_only") return set.reps > 0;
+  return set.weight > 0 && set.reps > 0; // load_reps
 }
 
-export const setVolume = (set) => set.weight * set.reps;
+/* Só faz sentido em kg — séries sem carga contribuem 0 (contam pra
+   frequência/nº de séries via exerciseSetsCount, não pro volume). */
+export function setVolume(set, metricType) {
+  return metricType === "load_reps" ? (set.weight || 0) * (set.reps || 0) : 0;
+}
 
 export function exerciseVolume(ex) {
-  return sum(ex.sets.filter(isCountedSet).map(setVolume));
+  const metricType = exerciseMetricType(ex);
+  return sum(ex.sets.filter((s) => isCountedSet(s, metricType)).map((s) => setVolume(s, metricType)));
 }
 
 export function exerciseSetsCount(ex) {
-  return ex.sets.filter(isCountedSet).length;
+  const metricType = exerciseMetricType(ex);
+  return ex.sets.filter((s) => isCountedSet(s, metricType)).length;
 }
 
 export function sessionVolume(session) {
@@ -37,11 +57,20 @@ export function epley1RM(weight, reps) {
   return weight * (1 + reps / 30);
 }
 
-/* Best set of an exercise instance, ranked by estimated 1RM (accounts for
-   both weight and reps) — used as the "força" signal everywhere. */
+/* Melhor série de uma instância do exercício — o que "melhor" significa
+   depende do metricType: maior carga (via 1RM estimado) pra load_reps,
+   mais repetições pra reps_only, hold mais longo pra time. */
 export function bestSetOf(ex) {
-  const counted = ex.sets.filter(isCountedSet);
+  const metricType = exerciseMetricType(ex);
+  const counted = ex.sets.filter((s) => isCountedSet(s, metricType));
   if (counted.length === 0) return null;
+
+  if (metricType === "time") {
+    return counted.reduce((best, s) => (!best || s.durationSec > best.durationSec ? s : best), null);
+  }
+  if (metricType === "reps_only") {
+    return counted.reduce((best, s) => (!best || s.reps > best.reps ? s : best), null);
+  }
   return counted.reduce((best, s) => {
     const e1rm = epley1RM(s.weight, s.reps);
     if (!best || e1rm > epley1RM(best.weight, best.reps)) return s;
@@ -184,6 +213,10 @@ export function mostFrequentExerciseKey(sessions) {
   return opts.length ? opts[0].key : null;
 }
 
+/* Um ponto por sessão — o número "principal" (primaryValue) depende do
+   metricType do exercício: 1RM estimado pra load_reps, melhor repetição
+   pra reps_only, hold mais longo pra time. Mantém bestWeight/bestReps/e1rm
+   pra quem já consumia esses campos especificamente (gráfico de carga). */
 export function exerciseHistory(sessions, exerciseKey) {
   const points = sessions
     .slice()
@@ -192,12 +225,21 @@ export function exerciseHistory(sessions, exerciseKey) {
       s.exercises
         .filter((ex) => exerciseKeyOf(ex) === exerciseKey && exerciseSetsCount(ex) > 0)
         .map((ex) => {
+          const metricType = exerciseMetricType(ex);
           const best = bestSetOf(ex);
+          const primaryValue = metricType === "time"
+            ? best.durationSec
+            : metricType === "reps_only"
+              ? best.reps
+              : best.weight;
           return {
             date: s.date,
-            bestWeight: best.weight,
-            bestReps: best.reps,
-            e1rm: Math.round(epley1RM(best.weight, best.reps) * 10) / 10,
+            metricType,
+            primaryValue,
+            bestWeight: metricType === "load_reps" ? best.weight : null,
+            bestReps: metricType !== "time" ? best.reps : null,
+            bestDurationSec: metricType === "time" ? best.durationSec : null,
+            e1rm: metricType === "load_reps" ? Math.round(epley1RM(best.weight, best.reps) * 10) / 10 : null,
             volume: Math.round(exerciseVolume(ex)),
           };
         })
@@ -205,8 +247,8 @@ export function exerciseHistory(sessions, exerciseKey) {
 
   let bestSoFar = -Infinity;
   for (const p of points) {
-    p.isPR = p.e1rm > bestSoFar;
-    if (p.isPR) bestSoFar = p.e1rm;
+    p.isPR = p.primaryValue > bestSoFar;
+    if (p.isPR) bestSoFar = p.primaryValue;
   }
   return points;
 }
@@ -219,23 +261,24 @@ export function loadProgression(sessions, exerciseKey, weeks) {
   const points = exerciseHistory(sessions, exerciseKey).filter((p) => p.date >= since);
 
   if (points.length === 0) {
-    return { points: [], count: 0, weeksSpan: 0, loadChangePct: null, trendline: [] };
+    return { points: [], count: 0, weeksSpan: 0, loadChangePct: null, trendline: [], metricType: null };
   }
 
+  const metricType = points[0].metricType;
   const weeksSpan = new Set(points.map((p) => mondayOf(p.date))).size;
 
   const [firstHalf, secondHalf] = halves(points);
-  const firstHalfAvg = mean(firstHalf.map((p) => p.e1rm));
-  const secondHalfAvg = mean(secondHalf.map((p) => p.e1rm));
+  const firstHalfAvg = mean(firstHalf.map((p) => p.primaryValue));
+  const secondHalfAvg = mean(secondHalf.map((p) => p.primaryValue));
   const loadChangePct = pctChange(firstHalfAvg, secondHalfAvg);
 
   const first = points[0].date;
-  const reg = linearRegression(points.map((p) => ({ x: daysBetween(first, p.date), y: p.e1rm })));
+  const reg = linearRegression(points.map((p) => ({ x: daysBetween(first, p.date), y: p.primaryValue })));
   const trendline = reg
     ? points.map((p) => ({ date: p.date, value: reg.intercept + reg.slope * daysBetween(first, p.date) }))
     : [];
 
-  return { points, count: points.length, weeksSpan, firstHalfAvg, secondHalfAvg, loadChangePct, trendline };
+  return { points, count: points.length, weeksSpan, firstHalfAvg, secondHalfAvg, loadChangePct, trendline, metricType };
 }
 
 /* ---------------------------------------------------------
@@ -280,6 +323,10 @@ export function consistency(sessions, weeks) {
 /* ---------------------------------------------------------
    PERSONAL RECORDS
 --------------------------------------------------------- */
+/* Recorde por exercício — o que conta de "melhor" depende do metricType
+   (ver bestSetOf/exerciseHistory): 1RM estimado, mais repetições, ou hold
+   mais longo. bestWeight/best1RM continuam disponíveis só pra load_reps,
+   pra quem já lia esses campos especificamente. */
 export function personalRecords(sessions) {
   const byExercise = {};
   for (const s of sessions) {
@@ -287,18 +334,27 @@ export function personalRecords(sessions) {
       const best = bestSetOf(ex);
       if (!best) continue;
       const key = exerciseKeyOf(ex);
-      const e1rm = epley1RM(best.weight, best.reps);
+      const metricType = exerciseMetricType(ex);
+      const primaryValue = metricType === "time" ? best.durationSec : metricType === "reps_only" ? best.reps : epley1RM(best.weight, best.reps);
+
       if (!byExercise[key]) {
-        byExercise[key] = { name: ex.name, muscleGroup: ex.muscleGroup, bestWeight: 0, best1RM: 0 };
+        byExercise[key] = { name: ex.name, muscleGroup: ex.muscleGroup, metricType, bestValue: 0, bestWeight: 0, best1RM: 0 };
       }
       const rec = byExercise[key];
-      if (best.weight > rec.bestWeight) {
-        rec.bestWeight = best.weight;
-        rec.bestWeightDate = s.date;
+      if (primaryValue > rec.bestValue) {
+        rec.bestValue = Math.round(primaryValue * 10) / 10;
+        rec.bestValueDate = s.date;
       }
-      if (e1rm > rec.best1RM) {
-        rec.best1RM = Math.round(e1rm * 10) / 10;
-        rec.best1RMDate = s.date;
+      if (metricType === "load_reps") {
+        if (best.weight > rec.bestWeight) {
+          rec.bestWeight = best.weight;
+          rec.bestWeightDate = s.date;
+        }
+        const e1rm = epley1RM(best.weight, best.reps);
+        if (e1rm > rec.best1RM) {
+          rec.best1RM = Math.round(e1rm * 10) / 10;
+          rec.best1RMDate = s.date;
+        }
       }
     }
   }
@@ -320,20 +376,22 @@ export function personalRecords(sessions) {
 /* ---------------------------------------------------------
    LIVE PR DETECTION (durante uma sessão em andamento)
 --------------------------------------------------------- */
-/* Todos os sets "contados" (done, peso e reps válidos) de cada exercício já
-   registrados em sessões anteriores, agrupados por chave — usado para
-   destacar ao vivo quando uma série da sessão atual bate recorde, sem
-   precisar rodar uma consulta separada por exercício a cada tecla digitada. */
+/* Todos os sets "contados" (done, com valor válido pro metricType daquele
+   exercício) de cada exercício já registrados em sessões anteriores,
+   agrupados por chave — usado para destacar ao vivo quando uma série da
+   sessão atual bate recorde, sem precisar rodar uma consulta separada por
+   exercício a cada tecla digitada. */
 export function setHistoryByExercise(sessions) {
   const map = new Map();
   for (const s of sessions) {
     for (const ex of s.exercises) {
-      const counted = ex.sets.filter(isCountedSet);
+      const metricType = exerciseMetricType(ex);
+      const counted = ex.sets.filter((set) => isCountedSet(set, metricType));
       if (counted.length === 0) continue;
       const key = exerciseKeyOf(ex);
       if (!map.has(key)) map.set(key, []);
       const bucket = map.get(key);
-      for (const set of counted) bucket.push({ weight: set.weight, reps: set.reps });
+      for (const set of counted) bucket.push({ weight: set.weight, reps: set.reps, durationSec: set.durationSec });
     }
   }
   return map;
@@ -341,22 +399,38 @@ export function setHistoryByExercise(sessions) {
 
 /* Recorde de peso (mais pesado já levantado, em qualquer repetição) e de
    repetições (mais reps já feitas nesse peso ou mais) são independentes —
-   uma série pode bater os dois, um só, ou nenhum. Precisa de pelo menos um
-   registro anterior: a primeira vez que um exercício é feito não conta como
-   "recorde" (não há nada ainda para bater). */
-export function detectSetPR(history, weight, reps) {
-  if (!(weight > 0) || !(reps > 0) || !history || history.length === 0) {
-    return { weightPR: false, repsPR: false };
+   uma série pode bater os dois, um só, ou nenhum. Pra reps_only, "recorde
+   de reps" passa a ser simplesmente a maior contagem já feita (não há
+   carga pra comparar "nesse peso ou mais"). Pra time, é o hold mais longo.
+   Precisa de pelo menos um registro anterior: a primeira vez que um
+   exercício é feito não conta como "recorde" (não há nada ainda para
+   bater). */
+export function detectSetPR(history, metricType, set) {
+  const none = { weightPR: false, repsPR: false, timePR: false };
+  if (!history || history.length === 0) return none;
+
+  if (metricType === "time") {
+    if (!(set.durationSec > 0)) return none;
+    const bestDuration = history.reduce((max, h) => Math.max(max, h.durationSec || 0), 0);
+    return { ...none, timePR: set.durationSec > bestDuration };
   }
+  if (metricType === "reps_only") {
+    if (!(set.reps > 0)) return none;
+    const bestReps = history.reduce((max, h) => Math.max(max, h.reps || 0), 0);
+    return { ...none, repsPR: set.reps > bestReps };
+  }
+
+  if (!(set.weight > 0) || !(set.reps > 0)) return none;
   let bestWeight = 0;
   let bestRepsAtWeight = 0;
   for (const h of history) {
     if (h.weight > bestWeight) bestWeight = h.weight;
-    if (h.weight >= weight && h.reps > bestRepsAtWeight) bestRepsAtWeight = h.reps;
+    if (h.weight >= set.weight && h.reps > bestRepsAtWeight) bestRepsAtWeight = h.reps;
   }
   return {
-    weightPR: weight > bestWeight,
-    repsPR: reps > bestRepsAtWeight,
+    weightPR: set.weight > bestWeight,
+    repsPR: set.reps > bestRepsAtWeight,
+    timePR: false,
   };
 }
 

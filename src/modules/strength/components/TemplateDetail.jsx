@@ -4,11 +4,20 @@ import { ArrowLeft, Pencil, Play, Share2, Trash2 } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtDateShort, fmtDuration, fmtVolume } from "../../../lib/format";
 import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
-import { muscleGroupInfo } from "../constants";
+import { exerciseMetricType, muscleGroupInfo } from "../constants";
 import { exerciseHistory, sessionSetsCount, sessionVolume } from "../analytics";
 import { Card, CardHeader, Pill, Select } from "../../../components/ui";
 
 const musculacao = modalityInfo("musculacao");
+
+/* Formata o valor "principal" do gráfico de evolução de acordo com o
+   metricType do exercício selecionado — mesmo padrão usado no HYROX. */
+function formatPrimaryValue(metricType, value) {
+  if (value === null || value === undefined) return "—";
+  if (metricType === "time") return fmtDuration(value);
+  if (metricType === "reps_only") return `${Math.round(value)} reps`;
+  return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg`;
+}
 
 export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, onShare, onStart, onEditSession, onDeleteSession }) {
   useLockBodyScroll();
@@ -18,12 +27,14 @@ export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, 
   );
 
   const [exerciseKey, setExerciseKey] = useState(template.exercises[0]?.catalogId || template.exercises[0]?.name || null);
+  const activeExercise = template.exercises.find((ex) => (ex.catalogId || ex.name) === exerciseKey);
+  const activeMetricType = exerciseMetricType(activeExercise);
   const history = useMemo(
     () => (exerciseKey ? exerciseHistory(sessions, exerciseKey) : []),
     [sessions, exerciseKey]
   );
   const chartData = useMemo(
-    () => history.map((p) => ({ label: fmtDateShort(p.date), weight: p.bestWeight, e1rm: p.e1rm, isPR: p.isPR })),
+    () => history.map((p) => ({ label: fmtDateShort(p.date), weight: p.bestWeight, e1rm: p.e1rm, primaryValue: p.primaryValue, isPR: p.isPR })),
     [history]
   );
 
@@ -70,7 +81,13 @@ export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, 
         <Card>
           <CardHeader
             title="Evolução por exercício"
-            description="Melhor carga e 1RM estimado por execução"
+            description={
+              activeMetricType === "time"
+                ? "Hold mais longo por execução"
+                : activeMetricType === "reps_only"
+                  ? "Melhor repetição por execução"
+                  : "Melhor carga e 1RM estimado por execução"
+            }
             right={
               <Select
                 value={exerciseKey}
@@ -91,15 +108,29 @@ export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, 
                   <Tooltip
                     contentStyle={{ background: C.bgSoft, border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 12 }}
                     labelStyle={{ color: C.white }}
-                    formatter={(v, name) => [`${v} kg`, name === "weight" ? "Melhor carga" : "1RM estimado"]}
+                    formatter={(v, name) => [
+                      formatPrimaryValue(activeMetricType, v),
+                      activeMetricType !== "load_reps" ? "Resultado" : (name === "weight" ? "Melhor carga" : "1RM estimado"),
+                    ]}
                   />
-                  <Line type="monotone" dataKey="weight" stroke={musculacao.color} strokeWidth={2.5}
-                    dot={(props) => {
-                      const { cx, cy, payload, key } = props;
-                      return <circle key={key} cx={cx} cy={cy} r={payload.isPR ? 5 : 3} fill={payload.isPR ? C.amber : musculacao.color} stroke="none" />;
-                    }}
-                  />
-                  <Line type="monotone" dataKey="e1rm" stroke="#A78BFA" strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
+                  {activeMetricType === "load_reps" ? (
+                    <>
+                      <Line type="monotone" dataKey="weight" stroke={musculacao.color} strokeWidth={2.5}
+                        dot={(props) => {
+                          const { cx, cy, payload, key } = props;
+                          return <circle key={key} cx={cx} cy={cy} r={payload.isPR ? 5 : 3} fill={payload.isPR ? C.amber : musculacao.color} stroke="none" />;
+                        }}
+                      />
+                      <Line type="monotone" dataKey="e1rm" stroke="#A78BFA" strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
+                    </>
+                  ) : (
+                    <Line type="monotone" dataKey="primaryValue" stroke={musculacao.color} strokeWidth={2.5}
+                      dot={(props) => {
+                        const { cx, cy, payload, key } = props;
+                        return <circle key={key} cx={cx} cy={cy} r={payload.isPR ? 5 : 3} fill={payload.isPR ? C.amber : musculacao.color} stroke="none" />;
+                      }}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -118,8 +149,12 @@ export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, 
                     <span style={{ color: C.gray, fontSize: 10 }}>{fmtDateShort(s.date)}</span>
                   </div>
                   <div className="flex-1 flex items-center gap-3 text-sm flex-wrap" style={{ color: C.white }}>
-                    <span>{fmtVolume(sessionVolume(s))}</span>
-                    <span style={{ color: C.gray }}>•</span>
+                    {sessionVolume(s) > 0 && (
+                      <>
+                        <span>{fmtVolume(sessionVolume(s))}</span>
+                        <span style={{ color: C.gray }}>•</span>
+                      </>
+                    )}
                     <span>{sessionSetsCount(s)} séries</span>
                     <span style={{ color: C.gray }}>•</span>
                     <span>{fmtDuration(s.durationSec)}</span>

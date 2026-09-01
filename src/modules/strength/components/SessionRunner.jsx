@@ -6,7 +6,7 @@ import {
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtDuration, todayStr, uid } from "../../../lib/format";
 import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
-import { DEFAULT_SETS, muscleGroupInfo } from "../constants";
+import { DEFAULT_SETS, exerciseMetricType, muscleGroupInfo } from "../constants";
 import { detectSetPR, exerciseKeyOf, setHistoryByExercise } from "../analytics";
 import { ExercisePicker } from "./ExercisePicker";
 import { SaveChoiceModal } from "./SaveChoiceModal";
@@ -14,11 +14,14 @@ import { SaveChoiceModal } from "./SaveChoiceModal";
 const musculacao = modalityInfo("musculacao");
 
 function cloneSetForPrefill(set) {
-  return { id: uid(), weight: set.weight, reps: set.reps, status: "pending", notes: "" };
+  return { id: uid(), weight: set.weight, reps: set.reps, durationSec: set.durationSec, status: "pending", notes: "" };
 }
 
 function emptySet(prevSet) {
-  return { id: uid(), weight: prevSet?.weight ?? null, reps: prevSet?.reps ?? null, status: "pending", notes: "" };
+  return {
+    id: uid(), weight: prevSet?.weight ?? null, reps: prevSet?.reps ?? null,
+    durationSec: prevSet?.durationSec ?? null, status: "pending", notes: "",
+  };
 }
 
 function exerciseFromTemplateEntry(te, lastSession) {
@@ -34,6 +37,7 @@ function exerciseFromTemplateEntry(te, lastSession) {
     name: te.name,
     muscleGroup: te.muscleGroup,
     equipment: te.equipment,
+    metricType: te.metricType || "load_reps",
     notes: te.notes || "",
     sets: sets.length ? sets : [emptySet()],
   };
@@ -46,6 +50,7 @@ function exerciseFromPicked(entry) {
     name: entry.name,
     muscleGroup: entry.muscleGroup,
     equipment: entry.equipment,
+    metricType: entry.metricType || "load_reps",
     notes: "",
     sets: Array.from({ length: DEFAULT_SETS }, () => emptySet()),
   };
@@ -167,6 +172,7 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
         name: entry.name,
         muscleGroup: entry.muscleGroup,
         equipment: entry.equipment,
+        metricType: entry.metricType || "load_reps",
         sets: Array.from({ length: DEFAULT_SETS }, () => emptySet()),
       });
     }
@@ -175,23 +181,33 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
 
   function normalizeForSave() {
     return exercises
-      .map((ex, i) => ({
-        id: ex.id,
-        sourceExerciseId: ex.sourceExerciseId,
-        name: ex.name,
-        muscleGroup: ex.muscleGroup,
-        equipment: ex.equipment,
-        notes: ex.notes,
-        order: i,
-        sets: ex.sets
-          .map((s) => {
-            const weight = s.weight === null || s.weight === "" ? null : parseFloat(s.weight);
-            if (s.status === "skipped") return { ...s, weight, reps: s.reps ?? null };
-            if (weight > 0 && s.reps > 0) return { ...s, weight, status: "done" };
-            return null; // empty, never touched — drop it
-          })
-          .filter(Boolean),
-      }))
+      .map((ex, i) => {
+        const metricType = exerciseMetricType(ex);
+        return {
+          id: ex.id,
+          sourceExerciseId: ex.sourceExerciseId,
+          name: ex.name,
+          muscleGroup: ex.muscleGroup,
+          equipment: ex.equipment,
+          metricType,
+          notes: ex.notes,
+          order: i,
+          sets: ex.sets
+            .map((s) => {
+              const weight = s.weight === null || s.weight === "" ? null : parseFloat(s.weight);
+              const durationSec = s.durationSec === null || s.durationSec === "" ? null : parseInt(s.durationSec, 10);
+              if (s.status === "skipped") return { ...s, weight, reps: s.reps ?? null, durationSec };
+              const hasValue = metricType === "time"
+                ? durationSec > 0
+                : metricType === "reps_only"
+                  ? s.reps > 0
+                  : weight > 0 && s.reps > 0;
+              if (hasValue) return { ...s, weight, durationSec, status: "done" };
+              return null; // empty, never touched — drop it
+            })
+            .filter(Boolean),
+        };
+      })
       .filter((ex) => ex.sets.length > 0);
   }
 
@@ -290,6 +306,7 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 flex flex-col gap-3 max-w-2xl w-full mx-auto">
         {exercises.map((ex, i) => {
           const group = muscleGroupInfo(ex.muscleGroup);
+          const metricType = exerciseMetricType(ex);
           const exerciseHistory = historyByExercise.get(exerciseKeyOf(ex)) || [];
           return (
             <div key={ex.id} className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
@@ -301,7 +318,12 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold" style={{ color: C.white, fontFamily: "'Poppins', sans-serif" }}>{ex.name}</div>
                   <div className="flex items-center gap-1.5 mt-0.5 text-xs" style={{ color: group.color }}>
-                    {group.label}<span style={{ color: C.gray }}>• {ex.equipment}</span>
+                    {group.label}
+                    <span style={{ color: C.gray }}>
+                      • {ex.equipment}
+                      {metricType === "time" && " • por tempo"}
+                      {metricType === "reps_only" && " • só reps"}
+                    </span>
                   </div>
                 </div>
                 <button onClick={() => toggleNotes(ex.id)} className="p-1.5 rounded-lg" style={{ color: notesOpenIds.has(ex.id) ? musculacao.color : C.gray }}>
@@ -328,13 +350,15 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
                 {ex.sets.map((s, si) => {
                   const skipped = s.status === "skipped";
                   const done = s.status === "done";
-                  const { weightPR, repsPR } = done ? detectSetPR(exerciseHistory, s.weight, s.reps) : { weightPR: false, repsPR: false };
-                  const isPR = weightPR || repsPR;
+                  const { weightPR, repsPR, timePR } = done ? detectSetPR(exerciseHistory, metricType, s) : { weightPR: false, repsPR: false, timePR: false };
+                  const isPR = weightPR || repsPR || timePR;
                   const prLabel = weightPR && repsPR
                     ? "Novo recorde de peso e repetições!"
                     : weightPR
                       ? "Novo recorde de peso!"
-                      : "Novo recorde de repetições!";
+                      : timePR
+                        ? "Novo recorde de tempo!"
+                        : "Novo recorde de repetições!";
                   return (
                     <div
                       key={s.id}
@@ -347,25 +371,45 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
                       }}
                     >
                       <span className="text-xs w-4 flex-shrink-0" style={{ color: C.gray }}>{si + 1}</span>
-                      <input
-                        type="text" inputMode="decimal" placeholder="kg" value={s.weight ?? ""}
-                        disabled={skipped}
-                        onChange={(e) => {
-                          const raw = e.target.value.replace(",", ".");
-                          if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
-                          updateSet(ex.id, s.id, { weight: raw === "" ? null : raw });
-                        }}
-                        className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none"
-                        style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
-                      />
-                      <span style={{ color: C.gray, fontSize: 12 }}>×</span>
-                      <input
-                        type="number" inputMode="numeric" placeholder="reps" value={s.reps ?? ""}
-                        disabled={skipped}
-                        onChange={(e) => updateSet(ex.id, s.id, { reps: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
-                        className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none"
-                        style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
-                      />
+                      {metricType === "time" ? (
+                        <input
+                          type="number" inputMode="numeric" placeholder="segundos" value={s.durationSec ?? ""}
+                          disabled={skipped}
+                          onChange={(e) => updateSet(ex.id, s.id, { durationSec: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
+                          className="w-20 rounded-lg px-2 py-2 text-sm text-center outline-none"
+                          style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
+                        />
+                      ) : metricType === "reps_only" ? (
+                        <input
+                          type="number" inputMode="numeric" placeholder="reps" value={s.reps ?? ""}
+                          disabled={skipped}
+                          onChange={(e) => updateSet(ex.id, s.id, { reps: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
+                          className="w-20 rounded-lg px-2 py-2 text-sm text-center outline-none"
+                          style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
+                        />
+                      ) : (
+                        <>
+                          <input
+                            type="text" inputMode="decimal" placeholder="kg" value={s.weight ?? ""}
+                            disabled={skipped}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(",", ".");
+                              if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
+                              updateSet(ex.id, s.id, { weight: raw === "" ? null : raw });
+                            }}
+                            className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none"
+                            style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
+                          />
+                          <span style={{ color: C.gray, fontSize: 12 }}>×</span>
+                          <input
+                            type="number" inputMode="numeric" placeholder="reps" value={s.reps ?? ""}
+                            disabled={skipped}
+                            onChange={(e) => updateSet(ex.id, s.id, { reps: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
+                            className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none"
+                            style={{ background: C.surface2, border: `1px solid ${C.border}`, color: C.white }}
+                          />
+                        </>
+                      )}
                       {isPR && (
                         <span title={prLabel} className="flex-shrink-0">
                           <Trophy size={15} style={{ color: C.amber }} />

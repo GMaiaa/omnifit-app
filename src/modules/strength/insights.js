@@ -1,4 +1,4 @@
-import { addDays, todayStr } from "../../lib/format";
+import { addDays, fmtDuration, todayStr } from "../../lib/format";
 import {
   consistency,
   exerciseHistory,
@@ -29,12 +29,12 @@ function newRecordInsights(sessions) {
     if (history.length < 2) continue;
     const last = history[history.length - 1];
     if (last.isPR && last.date >= cutoff) {
-      out.push({
-        id: `pr-${opt.key}`,
-        tone: "positive",
-        priority: 0,
-        text: `Novo recorde pessoal! Sua melhor carga em ${opt.name} agora é de ${last.bestWeight.toLocaleString("pt-BR")} kg × ${last.bestReps} reps.`,
-      });
+      const text = last.metricType === "time"
+        ? `Novo recorde pessoal! Seu hold mais longo em ${opt.name} agora é de ${fmtDuration(last.bestDurationSec)}.`
+        : last.metricType === "reps_only"
+          ? `Novo recorde pessoal! Você já fez ${last.bestReps} repetições em ${opt.name}.`
+          : `Novo recorde pessoal! Sua melhor carga em ${opt.name} agora é de ${last.bestWeight.toLocaleString("pt-BR")} kg × ${last.bestReps} reps.`;
+      out.push({ id: `pr-${opt.key}`, tone: "positive", priority: 0, text });
     }
   }
   return out;
@@ -48,13 +48,15 @@ function loadProgressionInsights(sessions, windowWeeks) {
 
     if (trend.loadChangePct === null) continue;
 
+    const noun = trend.metricType === "time" ? "o tempo de hold" : trend.metricType === "reps_only" ? "as repetições" : "a carga";
+
     if (Math.abs(trend.loadChangePct) >= LOAD_CHANGE_THRESHOLD) {
       const improved = trend.loadChangePct > 0;
       out.push({
         id: `load-${opt.key}`,
         tone: improved ? "positive" : "warning",
         priority: 2,
-        text: `Você ${improved ? "aumentou" : "reduziu"} a carga de ${opt.name} em ${pct(trend.loadChangePct)}% nas últimas ${windowWeeks} semanas.`,
+        text: `Você ${improved ? "aumentou" : "reduziu"} ${noun} de ${opt.name} em ${pct(trend.loadChangePct)}% nas últimas ${windowWeeks} semanas.`,
       });
     } else if (trend.weeksSpan >= STAGNATION_MIN_WEEKS) {
       out.push({
@@ -74,6 +76,7 @@ function repsAtSameLoadInsights(sessions) {
     const history = exerciseHistory(sessions, opt.key);
     if (history.length < 2) continue;
     const [prev, last] = history.slice(-2);
+    if (last.metricType !== "load_reps") continue; // "mesma carga" só faz sentido pra load_reps
     if (prev.bestWeight === last.bestWeight && last.bestReps > prev.bestReps) {
       out.push({
         id: `reps-${opt.key}`,
