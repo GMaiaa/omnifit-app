@@ -6,12 +6,14 @@ import {
 import { C, modalityInfo } from "../../../lib/theme";
 import { fmtDuration, todayStr, uid } from "../../../lib/format";
 import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
+import { saveDraft, clearDraft } from "../../../lib/sessionDraft";
 import { DEFAULT_SETS, exerciseMetricType, muscleGroupInfo } from "../constants";
 import { detectSetPR, exerciseKeyOf, setHistoryByExercise } from "../analytics";
 import { ExercisePicker } from "./ExercisePicker";
 import { SaveChoiceModal } from "./SaveChoiceModal";
 
 const musculacao = modalityInfo("musculacao");
+const DRAFT_NAMESPACE = "strength";
 
 function cloneSetForPrefill(set) {
   return { id: uid(), weight: set.weight, reps: set.reps, durationSec: set.durationSec, status: "pending", notes: "" };
@@ -63,26 +65,28 @@ function mostRecentSessionFor(sessions, templateId) {
 /* ---------------------------------------------------------
    EXECUTION MODE — full-screen, optimized for gym use.
 --------------------------------------------------------- */
-export function SessionRunner({ template, sessions, onComplete, onClose }) {
+export function SessionRunner({ template, sessions, initialDraft, onComplete, onClose }) {
   useLockBodyScroll();
   const lastSession = useMemo(() => mostRecentSessionFor(sessions, template.id), [sessions, template.id]);
   const historyByExercise = useMemo(() => setHistoryByExercise(sessions), [sessions]);
 
   const [exercises, setExercises] = useState(() =>
-    template.exercises
-      .slice()
-      .sort((a, b) => a.order - b.order)
-      .map((te) => exerciseFromTemplateEntry(te, lastSession))
+    initialDraft?.exercises?.length
+      ? initialDraft.exercises
+      : template.exercises
+          .slice()
+          .sort((a, b) => a.order - b.order)
+          .map((te) => exerciseFromTemplateEntry(te, lastSession))
   );
-  const [notesOpenIds, setNotesOpenIds] = useState(() => new Set());
+  const [notesOpenIds, setNotesOpenIds] = useState(() => new Set(initialDraft?.notesOpenIds || []));
   const [pickerMode, setPickerMode] = useState(null); // null | "add" | exerciseId (substitute target)
   const [saveChoiceOpen, setSaveChoiceOpen] = useState(false);
   const [pendingSession, setPendingSession] = useState(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const startedAtRef = useRef(new Date().toISOString());
-  const startMsRef = useRef(Date.now());
+  const startedAtRef = useRef(initialDraft?.startedAt || new Date().toISOString());
+  const startMsRef = useRef(initialDraft?.startedAt ? new Date(initialDraft.startedAt).getTime() : Date.now());
   const [elapsedSec, setElapsedSec] = useState(0);
 
   useEffect(() => {
@@ -93,9 +97,31 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
   /* Timer de descanso: reinicia toda vez que uma série é marcada como
      concluída (em qualquer exercício), independente de qual vai começar
      em seguida. */
-  const [restSec, setRestSec] = useState(0);
-  const [resting, setResting] = useState(false);
-  const restStartMsRef = useRef(null);
+  const restStartMsRef = useRef(initialDraft?.restStartMs ?? null);
+  const [resting, setResting] = useState(!!initialDraft?.resting);
+  const [restSec, setRestSec] = useState(() =>
+    initialDraft?.resting && initialDraft?.restStartMs
+      ? Math.max(0, Math.floor((Date.now() - initialDraft.restStartMs) / 1000))
+      : 0
+  );
+
+  /* Autosave: salva o estado da sessão em andamento no localStorage a cada
+     mudança (com debounce pra não gravar a cada tecla digitada), pra sobreviver
+     a fechar/recarregar o app. Limpo ao finalizar ou sair da sessão. */
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      saveDraft(DRAFT_NAMESPACE, {
+        templateId: template.id,
+        templateName: template.name,
+        startedAt: startedAtRef.current,
+        exercises,
+        notesOpenIds: [...notesOpenIds],
+        resting,
+        restStartMs: restStartMsRef.current,
+      });
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [exercises, notesOpenIds, resting, template.id, template.name]);
 
   useEffect(() => {
     if (!resting) return;
@@ -227,6 +253,7 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
     setError("");
     try {
       await onComplete(session, action);
+      clearDraft(DRAFT_NAMESPACE);
     } catch (err) {
       setSaving(false);
       setError(err?.message || "Não foi possível salvar o treino. Tente novamente.");
@@ -268,6 +295,7 @@ export function SessionRunner({ template, sessions, onComplete, onClose }) {
   function handleClose() {
     if (saving) return;
     if (doneSets > 0 && !window.confirm("Sair sem salvar o treino? O progresso desta sessão será perdido.")) return;
+    clearDraft(DRAFT_NAMESPACE);
     onClose();
   }
 

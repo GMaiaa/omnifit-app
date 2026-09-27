@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { AlertTriangle, BarChart3, ListChecks, PlusCircle, Trophy } from "lucide-react";
+import { AlertTriangle, BarChart3, History, ListChecks, PlusCircle, Trophy } from "lucide-react";
 import { C, modalityInfo } from "../../lib/theme";
 import { uid } from "../../lib/format";
+import { clearDraft, loadDraft } from "../../lib/sessionDraft";
 import { DEFAULT_SETS } from "./constants";
 import {
   createStrengthSession, createStrengthTemplate, deleteStrengthSession, deleteStrengthTemplate,
@@ -47,6 +48,22 @@ export function StrengthModule({ templates, sessions }) {
   const [summary, setSummary] = useState(null);
   const [actionError, setActionError] = useState("");
   const [shareTarget, setShareTarget] = useState(null);
+  const [resumableDraft, setResumableDraft] = useState(() => loadDraft("strength"));
+
+  function handleResumeDraft() {
+    const draftTemplate = templates.templates.find((t) => t.id === resumableDraft.templateId);
+    if (!draftTemplate) {
+      clearDraft("strength");
+      setResumableDraft(null);
+      return;
+    }
+    setActiveSession(draftTemplate);
+  }
+
+  function handleDiscardDraft() {
+    clearDraft("strength");
+    setResumableDraft(null);
+  }
 
   function handleShareTemplate(t) {
     setShareTarget({
@@ -167,6 +184,7 @@ export function StrengthModule({ templates, sessions }) {
       durationSec: createdSession.durationSec,
     });
     setActiveSession(null);
+    setResumableDraft(null);
     setTimeout(() => setSummary(null), 6000);
   }
 
@@ -209,6 +227,40 @@ export function StrengthModule({ templates, sessions }) {
         )}
       </div>
 
+      {resumableDraft && !activeSession && !templates.loading && (
+        <Card className="flex items-center justify-between flex-wrap gap-3" style={{ border: `1px solid ${musculacao.color}55` }}>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="rounded-full p-2 flex-shrink-0" style={{ background: `color-mix(in srgb, ${musculacao.color} 14%, transparent)` }}>
+              <History size={18} style={{ color: musculacao.color }} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold truncate" style={{ color: C.white, fontFamily: "'Poppins', sans-serif" }}>
+                Você tem um treino em andamento
+              </div>
+              <div className="text-xs truncate" style={{ color: C.gray }}>
+                {resumableDraft.templateName} • iniciado há {Math.max(0, Math.round((Date.now() - new Date(resumableDraft.startedAt).getTime()) / 60000))} min
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={handleDiscardDraft}
+              className="rounded-full px-3.5 py-2 text-xs font-semibold"
+              style={{ color: C.gray, border: `1px solid ${C.border}` }}
+            >
+              Descartar
+            </button>
+            <button
+              onClick={handleResumeDraft}
+              className="rounded-full px-3.5 py-2 text-xs font-semibold"
+              style={{ background: `linear-gradient(135deg, ${musculacao.color}, #5B21B6)`, color: C.white }}
+            >
+              Continuar treino
+            </button>
+          </div>
+        </Card>
+      )}
+
       {(templates.loading || sessions.loading) ? (
         <div className="flex justify-center py-20" style={{ color: C.gray }}>Carregando…</div>
       ) : tab === "analytics" ? (
@@ -245,7 +297,7 @@ export function StrengthModule({ templates, sessions }) {
               key={t.id}
               template={t}
               lastSessionDate={lastSessionDateFor(t.id)}
-              onStart={() => setActiveSession(t)}
+              onStart={() => { setActiveSession(t); setResumableDraft(null); }}
               onEdit={() => setFormTarget(t)}
               onDelete={() => handleDeleteTemplate(t.id)}
               onShare={() => handleShareTemplate(t)}
@@ -292,7 +344,7 @@ export function StrengthModule({ templates, sessions }) {
           onEdit={() => { setFormTarget(detailTemplate); setDetailTemplate(null); }}
           onDelete={() => handleDeleteTemplate(detailTemplate.id)}
           onShare={() => handleShareTemplate(detailTemplate)}
-          onStart={() => { setActiveSession(detailTemplate); setDetailTemplate(null); }}
+          onStart={() => { setActiveSession(detailTemplate); setResumableDraft(null); setDetailTemplate(null); }}
           onEditSession={setEditingSession}
           onDeleteSession={handleDeleteSession}
         />
@@ -302,8 +354,9 @@ export function StrengthModule({ templates, sessions }) {
         <SessionRunner
           template={activeSession}
           sessions={sessions.sessions}
+          initialDraft={resumableDraft?.templateId === activeSession.id ? resumableDraft : null}
           onComplete={handleSessionComplete}
-          onClose={() => setActiveSession(null)}
+          onClose={() => { setActiveSession(null); setResumableDraft(null); }}
         />
       )}
 
