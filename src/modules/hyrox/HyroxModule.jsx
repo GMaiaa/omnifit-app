@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { AlertTriangle, BarChart3, ListChecks, PlusCircle, Zap, Trophy } from "lucide-react";
+import { AlertTriangle, BarChart3, ClipboardList, History, ListChecks, PlusCircle, Zap, Trophy } from "lucide-react";
 import { C, modalityInfo } from "../../lib/theme";
-import { uid } from "../../lib/format";
+import { fmtDateShort, fmtDuration, uid } from "../../lib/format";
 import { DEFAULT_ROUNDS } from "./constants";
 import {
-  createHyroxSession, createHyroxTemplate, deleteHyroxTemplate,
+  createHyroxSession, createHyroxTemplate, deleteHyroxSession, deleteHyroxTemplate,
   mapHyroxError, updateHyroxTemplate,
 } from "./hyroxService";
 import { Card, EmptyState } from "../../components/ui";
@@ -13,6 +13,8 @@ import { TemplateCard } from "./components/TemplateCard";
 import { TemplateForm } from "./components/TemplateForm";
 import { TemplateDetail } from "./components/TemplateDetail";
 import { HyroxRunner } from "./components/HyroxRunner";
+import { ManualSessionForm } from "./components/ManualSessionForm";
+import { SessionDetail } from "./components/SessionDetail";
 import { AnalyticsTab } from "./components/analytics/AnalyticsTab";
 import { RecordsTab } from "./components/RecordsTab";
 
@@ -22,6 +24,7 @@ const SUB_NAV = [
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "recordes", label: "Recordes", icon: Trophy },
   { id: "treinos", label: "Treinos", icon: ListChecks },
+  { id: "historico", label: "Histórico", icon: History },
 ];
 
 const FREE_TEMPLATE = { id: null, name: "Treino Livre", focus: "metcon", blocks: [] };
@@ -44,6 +47,8 @@ export function HyroxModule({ templates, sessions }) {
   const [formTarget, setFormTarget] = useState(null); // null | true (new) | template (edit)
   const [detailTemplate, setDetailTemplate] = useState(null);
   const [activeSession, setActiveSession] = useState(null);
+  const [manualFormOpen, setManualFormOpen] = useState(false);
+  const [selectedSession, setSelectedSession] = useState(null);
   const [summary, setSummary] = useState(null);
   const [actionError, setActionError] = useState("");
   const [shareTarget, setShareTarget] = useState(null);
@@ -133,6 +138,48 @@ export function HyroxModule({ templates, sessions }) {
     setTimeout(() => setSummary(null), 6000);
   }
 
+  /* Registro pós-treino (ManualSessionForm) — sem ficha, sem timer ao vivo.
+     Mesmo insert de handleSessionComplete, mas sem a lógica de
+     atualizar/criar ficha (não existe SaveChoiceModal aqui: é sempre um
+     registro avulso). */
+  async function handleManualSessionComplete(session) {
+    let createdSession;
+    try {
+      createdSession = await createHyroxSession({
+        templateId: null,
+        templateName: session.templateName,
+        focus: session.focus,
+        date: session.date,
+        startedAt: session.startedAt,
+        finishedAt: session.finishedAt,
+        durationSec: session.durationSec,
+        notes: session.notes,
+        calories: session.calories,
+        avgHeartRate: session.avgHeartRate,
+        blocks: session.blocks,
+      });
+    } catch (err) {
+      throw new Error(mapHyroxError(err, "Não foi possível salvar o treino. Tente novamente."));
+    }
+
+    sessions.addSession(createdSession);
+    setManualFormOpen(false);
+    setSummary({ durationSec: createdSession.durationSec, blocks: createdSession.blocks.length });
+    setTimeout(() => setSummary(null), 6000);
+  }
+
+  async function handleDeleteSession(id) {
+    if (!window.confirm("Excluir esta execução? Essa ação não pode ser desfeita.")) return;
+    setActionError("");
+    try {
+      await deleteHyroxSession(id);
+      sessions.deleteSession(id);
+      if (selectedSession?.id === id) setSelectedSession(null);
+    } catch (err) {
+      setActionError(mapHyroxError(err, "Não foi possível excluir o treino. Tente novamente."));
+    }
+  }
+
   function lastSessionDateFor(templateId) {
     return sessions.sessions.find((s) => s.templateId === templateId)?.date ?? null;
   }
@@ -161,8 +208,15 @@ export function HyroxModule({ templates, sessions }) {
             );
           })}
         </nav>
-        {tab === "treinos" && (
+        {(tab === "treinos" || tab === "historico") && (
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setManualFormOpen(true)}
+              className="flex items-center gap-1.5 rounded-full px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold"
+              style={{ background: C.surface2, color: C.gray, border: `1px solid ${C.border}` }}
+            >
+              <ClipboardList size={16} /> <span className="hidden sm:inline">Registrar treino</span>
+            </button>
             <button
               onClick={() => setActiveSession(FREE_TEMPLATE)}
               className="flex items-center gap-1.5 rounded-full px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold"
@@ -187,6 +241,39 @@ export function HyroxModule({ templates, sessions }) {
         <AnalyticsTab sessions={sessions.sessions} />
       ) : tab === "recordes" ? (
         <RecordsTab sessions={sessions.sessions} />
+      ) : tab === "historico" ? (
+        sessions.sessions.length === 0 ? (
+          <EmptyState
+            icon={History}
+            title="Nenhuma execução registrada ainda"
+            description='Toque em "Registrar treino" pra cadastrar um treino que você já fez, ou finalize uma ficha/Treino Livre pra ele aparecer aqui.'
+          />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {sessions.sessions.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setSelectedSession(s)}
+                className="flex items-center gap-3 rounded-xl px-3.5 py-3 text-left"
+                style={{ background: C.surface, border: `1px solid ${C.border}` }}
+              >
+                <div className="flex flex-col items-center justify-center rounded-lg px-2.5 py-1.5 flex-shrink-0" style={{ background: C.surface2, minWidth: 56 }}>
+                  <span style={{ color: C.gray, fontSize: 10 }}>{fmtDateShort(s.date)}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold truncate" style={{ color: C.white }}>{s.templateName}</div>
+                  <div className="flex items-center gap-2 text-xs flex-wrap" style={{ color: C.gray }}>
+                    <span>{fmtDuration(s.durationSec)}</span>
+                    <span>•</span>
+                    <span>{s.blocks.length} estações</span>
+                    {s.calories != null && <><span>•</span><span>{s.calories} cal</span></>}
+                    {s.avgHeartRate != null && <><span>•</span><span>{s.avgHeartRate} bpm</span></>}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )
       ) : hasBlockingTemplatesError ? (
         <Card className="flex flex-col items-center justify-center text-center py-16 gap-3">
           <div className="rounded-full p-4" style={{ background: `color-mix(in srgb, ${C.danger} 8%, transparent)` }}>
@@ -274,6 +361,21 @@ export function HyroxModule({ templates, sessions }) {
           sessions={sessions.sessions}
           onComplete={handleSessionComplete}
           onClose={() => setActiveSession(null)}
+        />
+      )}
+
+      {manualFormOpen && (
+        <ManualSessionForm
+          onComplete={handleManualSessionComplete}
+          onClose={() => setManualFormOpen(false)}
+        />
+      )}
+
+      {selectedSession && (
+        <SessionDetail
+          session={selectedSession}
+          onClose={() => setSelectedSession(null)}
+          onDelete={() => handleDeleteSession(selectedSession.id)}
         />
       )}
 

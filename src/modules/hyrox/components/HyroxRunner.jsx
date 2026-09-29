@@ -11,9 +11,9 @@ import { hyroxExerciseKeyOf } from "../analytics";
 import { Select } from "../../../components/ui";
 import { ExercisePicker } from "./ExercisePicker";
 import { SaveChoiceModal } from "./SaveChoiceModal";
+import { RoundFields } from "./RoundFields";
 
 const hyrox = modalityInfo("hyrox");
-const inputStyle = { background: C.surface2, border: `1px solid ${C.border}`, color: C.white };
 
 function cloneRoundForPrefill(set) {
   return {
@@ -57,6 +57,7 @@ function blockFromTemplateEntry(tb, sessions) {
     notes: tb.notes || "",
     goalType: tb.goalType ?? null,
     goalValue: tb.goalValue ?? null,
+    goalLoadValue: tb.goalLoadValue ?? null,
     startedAt: null, finishedAt: null, durationSec: 0, transitionSec: 0,
     sets: sets.length ? sets : [emptyRound()],
   };
@@ -72,80 +73,10 @@ function blockFromPicked(entry) {
     notes: "",
     goalType: null,
     goalValue: null,
+    goalLoadValue: null,
     startedAt: null, finishedAt: null, durationSec: 0, transitionSec: 0,
     sets: [emptyRound()],
   };
-}
-
-function RoundFields({ metricType, round, onChange }) {
-  if (metricType === "reps") {
-    return (
-      <>
-        <input
-          type="number" inputMode="numeric" placeholder="reps" value={round.reps ?? ""}
-          onChange={(e) => onChange({ reps: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
-          className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none" style={inputStyle}
-        />
-        <input
-          type="number" inputMode="numeric" placeholder="desc. s" value={round.restSec ?? ""}
-          onChange={(e) => onChange({ restSec: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
-          className="w-20 rounded-lg px-2 py-2 text-sm text-center outline-none" style={inputStyle}
-        />
-      </>
-    );
-  }
-  if (metricType === "load") {
-    return (
-      <>
-        <input
-          type="number" inputMode="decimal" placeholder="kg" value={round.weight ?? ""}
-          onChange={(e) => onChange({ weight: e.target.value === "" ? null : parseFloat(e.target.value) })}
-          className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none" style={inputStyle}
-        />
-        <input
-          type="number" inputMode="numeric" placeholder="reps" value={round.reps ?? ""}
-          onChange={(e) => onChange({ reps: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
-          className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none" style={inputStyle}
-        />
-        <input
-          type="number" inputMode="decimal" placeholder="m" value={round.distanceM ?? ""}
-          onChange={(e) => onChange({ distanceM: e.target.value === "" ? null : parseFloat(e.target.value) })}
-          className="w-16 rounded-lg px-2 py-2 text-sm text-center outline-none" style={inputStyle}
-        />
-      </>
-    );
-  }
-  if (metricType === "time") {
-    return (
-      <>
-        <input
-          type="number" inputMode="numeric" placeholder="duração s" value={round.durationSec ?? ""}
-          onChange={(e) => onChange({ durationSec: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
-          className="w-24 rounded-lg px-2 py-2 text-sm text-center outline-none" style={inputStyle}
-        />
-        <input
-          type="number" inputMode="numeric" placeholder="desc. s" value={round.restSec ?? ""}
-          onChange={(e) => onChange({ restSec: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
-          className="w-20 rounded-lg px-2 py-2 text-sm text-center outline-none" style={inputStyle}
-        />
-      </>
-    );
-  }
-  // distance
-  return (
-    <>
-      <input
-        type="number" inputMode="decimal" placeholder="m" value={round.distanceM ?? ""}
-        onChange={(e) => onChange({ distanceM: e.target.value === "" ? null : parseFloat(e.target.value) })}
-        className="w-20 rounded-lg px-2 py-2 text-sm text-center outline-none" style={inputStyle}
-      />
-      <input
-        type="number" inputMode="numeric" placeholder="tempo s" value={round.durationSec ?? ""}
-        onChange={(e) => onChange({ durationSec: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
-        className="w-24 rounded-lg px-2 py-2 text-sm text-center outline-none" style={inputStyle}
-      />
-    </>
-  );
 }
 
 /* ---------------------------------------------------------
@@ -279,6 +210,7 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
         notes: b.notes,
         goalType: b.goalType ?? null,
         goalValue: b.goalValue ?? null,
+        goalLoadValue: b.goalLoadValue ?? null,
         order: i,
         startedAt: b.startedAt,
         finishedAt: b.finishedAt,
@@ -381,7 +313,7 @@ export function HyroxRunner({ template, sessions, onComplete, onClose }) {
         {blocks.map((b, i) => {
           const category = categoryInfo(b.category);
           const inProgress = !!b.startedAt && !b.finishedAt;
-          const goalLabel = formatGoalValue(b.goalType, b.goalValue);
+          const goalLabel = formatGoalValue(b.goalType, b.goalValue, b.goalLoadValue);
           return (
             <div key={b.id} className="rounded-2xl p-4" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
               <div className="flex items-start gap-2 mb-3">

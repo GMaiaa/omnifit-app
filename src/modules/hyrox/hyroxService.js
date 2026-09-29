@@ -28,6 +28,8 @@ export function mapSessionRow(row) {
     finishedAt: row.finished_at ?? null,
     durationSec: row.duration_sec ?? 0,
     notes: row.notes ?? null,
+    calories: row.calories ?? null,
+    avgHeartRate: row.avg_heart_rate ?? null,
     blocks: Array.isArray(row.blocks) ? row.blocks : [],
     createdAt: row.created_at ?? null,
   };
@@ -119,7 +121,7 @@ export async function deleteHyroxTemplate(id) {
 export async function getHyroxSessions() {
   const { data, error } = await supabase
     .from("hyrox_sessions")
-    .select("id, template_id, template_name, focus, date, started_at, finished_at, duration_sec, notes, blocks, created_at")
+    .select("id, template_id, template_name, focus, date, started_at, finished_at, duration_sec, notes, calories, avg_heart_rate, blocks, created_at")
     .order("date", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -136,7 +138,7 @@ export async function getHyroxSessions() {
    trás, a coluna aceita isso. */
 export async function createHyroxSession({
   templateId = null, templateName, focus, date, startedAt = null, finishedAt = null,
-  durationSec = 0, notes = null, blocks,
+  durationSec = 0, notes = null, calories = null, avgHeartRate = null, blocks,
 }) {
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
@@ -159,6 +161,8 @@ export async function createHyroxSession({
       finished_at: finishedAt,
       duration_sec: durationSec,
       notes,
+      calories,
+      avg_heart_rate: avgHeartRate,
       blocks,
     })
     .select()

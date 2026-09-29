@@ -68,7 +68,7 @@ export function TemplateDetail({ template, sessions, onClose, onEdit, onDelete, 
           <div className="flex flex-col gap-2">
             {template.blocks.slice().sort((a, b) => a.order - b.order).map((b, i) => {
               const category = categoryInfo(b.category);
-              const goalLabel = formatGoalValue(b.goalType, b.goalValue);
+              const goalLabel = formatGoalValue(b.goalType, b.goalValue, b.goalLoadValue);
               return (
                 <div key={b.id} className="flex items-center justify-between text-sm gap-2">
                   <div className="min-w-0">

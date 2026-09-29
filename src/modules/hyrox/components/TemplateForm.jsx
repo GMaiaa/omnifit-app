@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { CheckCircle2, ChevronDown, ChevronUp, Plus, Target, Trash2, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, Plus, Trash2, X } from "lucide-react";
 import { C, modalityInfo } from "../../../lib/theme";
 import { uid } from "../../../lib/format";
 import { useLockBodyScroll } from "../../../lib/useLockBodyScroll";
-import { DEFAULT_ROUNDS, FOCUS, GOAL_TYPES, categoryInfo } from "../constants";
+import { DEFAULT_ROUNDS, FOCUS, categoryInfo } from "../constants";
 import { createHyroxTemplate, mapHyroxError, updateHyroxTemplate } from "../hyroxService";
 import { ExercisePicker } from "./ExercisePicker";
+import { GoalPicker } from "./GoalPicker";
 
 const hyrox = modalityInfo("hyrox");
 
@@ -20,6 +21,7 @@ function newBlockRow(entry) {
     rounds: DEFAULT_ROUNDS,
     goalType: null,
     goalValue: null,
+    goalLoadValue: null,
   };
 }
 
@@ -186,36 +188,14 @@ export function TemplateForm({ initial, onSave, onClose }) {
                       </button>
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-wrap mt-2 pt-2" style={{ borderTop: `1px solid ${C.border}` }}>
-                      <Target size={12} style={{ color: C.gray, flexShrink: 0 }} />
-                      {GOAL_TYPES.map((g) => (
-                        <button
-                          key={g.id}
-                          onClick={() => updateBlock(b.id, b.goalType === g.id
-                            ? { goalType: null, goalValue: null }
-                            : { goalType: g.id, goalValue: b.goalType ? b.goalValue : null })}
-                          disabled={busy}
-                          className="rounded-md px-2 py-1 text-[11px] font-semibold disabled:opacity-60"
-                          style={{
-                            background: b.goalType === g.id ? `${hyrox.color}26` : C.surface,
-                            color: b.goalType === g.id ? hyrox.color : C.gray,
-                            border: `1px solid ${b.goalType === g.id ? hyrox.color : C.border}`,
-                          }}
-                        >
-                          {g.label}
-                        </button>
-                      ))}
-                      {b.goalType && (
-                        <input
-                          type="number" min="0"
-                          placeholder={GOAL_TYPES.find((g) => g.id === b.goalType)?.placeholder}
-                          value={b.goalValue ?? ""}
-                          onChange={(e) => updateBlock(b.id, { goalValue: e.target.value === "" ? null : Math.max(0, parseInt(e.target.value, 10) || 0) })}
-                          disabled={busy}
-                          className="w-20 rounded-md px-2 py-1 text-[11px] text-center outline-none disabled:opacity-60"
-                          style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.white }}
-                        />
-                      )}
+                    <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.border}` }}>
+                      <GoalPicker
+                        goalType={b.goalType}
+                        goalValue={b.goalValue}
+                        goalLoadValue={b.goalLoadValue}
+                        onChange={(patch) => updateBlock(b.id, patch)}
+                        disabled={busy}
+                      />
                     </div>
                   </div>
                 );

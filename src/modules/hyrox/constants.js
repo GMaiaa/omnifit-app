@@ -56,15 +56,27 @@ export const GOAL_TYPES = [
   { id: "distance", label: "Distância", placeholder: "metros" },
   { id: "calories", label: "Calorias", placeholder: "cal" },
   { id: "time", label: "Tempo", placeholder: "segundos" },
+  { id: "load_distance", label: "Carga + distância", placeholder: "metros", hasLoad: true },
+  { id: "load_reps", label: "Carga + reps", placeholder: "reps", hasLoad: true },
 ];
 export const goalTypeInfo = (id) => GOAL_TYPES.find((g) => g.id === id) || null;
 
 /* Formata o valor de uma meta pro tipo certo (distância em km/m, tempo em
    min:seg) — retorna null quando não há meta definida, pra quem consome
-   decidir se mostra o badge ou não. */
-export function formatGoalValue(goalType, goalValue) {
+   decidir se mostra o badge ou não. Tipos "carga + X" combinam um peso
+   (goalLoadValue) com a métrica principal (goalValue). */
+export function formatGoalValue(goalType, goalValue, goalLoadValue) {
   const n = Number(goalValue);
-  if (!goalType || !Number.isFinite(n) || n <= 0) return null;
+  if (!goalType) return null;
+
+  if (goalType === "load_distance" || goalType === "load_reps") {
+    const load = Number(goalLoadValue);
+    if (!Number.isFinite(load) || load <= 0 || !Number.isFinite(n) || n <= 0) return null;
+    const rest = goalType === "load_distance" ? fmtDistanceM(n) : `${n} reps`;
+    return `${load.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} kg • ${rest}`;
+  }
+
+  if (!Number.isFinite(n) || n <= 0) return null;
   if (goalType === "reps") return `${n} reps`;
   if (goalType === "distance") return fmtDistanceM(n);
   if (goalType === "calories") return `${n} cal`;
